@@ -24,7 +24,7 @@ const debug = argv.debug != undefined ? true : false;
 function app(cb) {
 	var num = 0;
 	
-	src('../emulator/**/*', { allowEmpty: true })
+	src('emulator/**/*', { allowEmpty: true })
 		.pipe(dest(dir+'/'))
 		.on("end", cb)
 
