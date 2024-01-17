@@ -8,22 +8,25 @@
 ### Uses Apple2js emulator by whscullin to run an Apple II on the web browser.
 
 1. You can get the latest version of the emulator from https://github.com/whscullin/apple2js
-2. But it's easier to just unpack the provided emulator.zip (it's an old version, but it works)
+2. Or you can use my own adaptation from https://foumartgames.com/extensions/AppleII/emulator.zip
 
-### Installation
+### Installation and Build
 
-Once you've ready with the above setup, run **npm install** to install node.js dependencies.
-
-After a successfull install you can build the project right away with **npm start** or **npm build**
+1. Run **npm install** to install dependencies.
+2. Build the project with the built-in **npm start** or **npm build**
 
 #### What does a build do:
 
-1. Cleans the public/ folder and prepares it for new build
-2. Copies the emulator/
-3. Copies the source DSK image from dsk/ folder (disk image should have the same name as project)
+1. Cleans (or creates) the public/ folder and prepares it for a new build.
+2. Copies the emulator/ to the public/ folder.
+3. Copies the source DSK image from dsk/ as well (disk image should have the same name as project).
 4. Converts the src/startup.bas working file into the tokenized format needed for Apple II and writes it on disk.
-5. Starts or Syncs the Apple II emulator on the web configured to load the disk and directly run the project.
+5. Starts or Syncs the Apple II emulator on localhost, configured to load the disk and run the project startup.
 
-After a successfull build the live reload will restart the Emulator with any change you do with the source right away.
+### Development
+1. Use Live reload - the web Emulator will restart with any change you perform within the src/ folder.
+2. Explore the current demo - a BASIC example of a double hi-res picture loading and plotting on top via FDRAW binary subroutines.
 
 Enjoy!
+
+PS. The plotting only works if there is mouse interface available on the system, BASIC seems very slow for any mouse imput handling - mouse interactions should be written in Assembly. The plotting is currently only done on the first PAGE - to be updated.. About the assembly mouse scripting - check the binary demo TRACK.
