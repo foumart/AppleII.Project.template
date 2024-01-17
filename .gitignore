@@ -1,6 +1,7 @@
 node_modules
 public
 package-lock.json
+emulator
 .vscode
 .github
 .git
