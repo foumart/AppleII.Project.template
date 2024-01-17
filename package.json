@@ -1,0 +1,33 @@
+{
+	"name": "a2-project",
+	"version": "0.0.1",
+	"description": "apple 2 - project build",
+	"main": "src/scripts/app.js",
+	"scripts": {
+		"build": "npx del-cli public --force && gulp",
+		"start": "npx del-cli public --force && gulp sync"
+	},
+	"resolutions": {
+		"mkdir": "^0.5.3"
+	},
+	"devDependencies": {
+		"browser-sync": "^2.27.9",
+		"del-cli": "^4.0.1",
+		"gulp": "^4.0.2",
+		"yargs": "^17.4.0",
+		"child_process": "^1.0.2"
+	},
+	"dependencies": {
+		"npm": "^8.11.0"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/foumart/A2.project.git"
+	},
+	"author": {
+		"name": "Noncho Savov",
+		"email": "contact@foumartgames.com",
+		"url": "https://www.foumartgames.com/"
+	},
+	"license": "MIT"
+}
