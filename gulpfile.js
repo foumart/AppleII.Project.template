@@ -114,7 +114,7 @@ function watch(callback) {
 		exports.sync();
 	});
 
-	// should we watch for changes elsewhere
+	// should we watch for changes elsewhere, for example if we modify an image
 	/*gulp.watch('./bin').on('change', () => {
 		exports.sync();
 	});*/
