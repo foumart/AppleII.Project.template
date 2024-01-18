@@ -1,4 +1,4 @@
-## BASIC project development setup for Apple II with emulator live-reload on localhost.
+## BASIC development setup for Apple II with emulator live-reload on localhost.
 
 ### Depends on AppleCommander-ac-1.9.0.jar to build DSK images.
 
@@ -7,7 +7,7 @@
 
 ### Relies on Apple2js emulator to run Apple II in the web browser.
 
-1. Download my old adaptation over Will Scullin's javascript emulator: https://foumartgames.com/extensions/AppleII/emulator.zip
+1. Download my adaptation over Will Scullin's emulator: https://foumartgames.com/extensions/AppleII/emulator.zip
 2. Or get the latest emulator from whscullin github at: https://github.com/whscullin/apple2js
 3. Make sure you have an emulator/ folder in the root of your project - it will be used during build..
 
@@ -27,7 +27,7 @@
 #### Useful for Development:
 
 1. Live reload - the web Emulator will restart with any change you perform within the src/ folder.
-2. Ideally not only basic should be able to be compiled by this development automatization, but assembly as well - check TODO. 
+2. Ideally not only basic should be compiled by this development automatization but assembly as well - check TODO. 
 
 #### TODO:
 
