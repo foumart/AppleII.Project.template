@@ -5,6 +5,7 @@ const del = require('del');
 const argv = require('yargs').argv;
 const package = require('./package.json');
 const exec = require('child_process').exec;
+const fs = require("fs");
 
 // the following data is taken directly from package.json
 const title = package.name;
@@ -15,6 +16,19 @@ const version = package.version;
 const dir = argv.dir || 'public';
 const test = argv.test != undefined ? true : false;
 const debug = argv.debug != undefined ? true : false;
+const address = "8000";// default address (in HEX) where to load binary files, if not specified
+
+const appleCommander = "C:/Standalone/AppleWin/ac.jar";
+const appleWin = "C:/Standalone/AppleWin/AppleWin.exe";
+const merlin = "C:/Standalone/AppleWin/Merlin32.exe";
+const retroassembler = "C:/Standalone/AppleWin/retroassembler/retroassembler.exe";
+
+
+// used during build
+const bas = [];// holds bas file names found in src/
+const bin = [];// holds bin file names found in src/
+const bascallbacks = [];// holds if the corresponding basic file compilation process is complete or not
+const bincallbacks = [];// holds if the corresponding binary file compilation process is complete or not
 
 // ======
 // TASKS:
@@ -22,18 +36,10 @@ const debug = argv.debug != undefined ? true : false;
 
 // Copy the Apple II web emulator
 function app(cb) {
-	var num = 0;
-	
 	src('emulator/**/*', { allowEmpty: true })
 		.pipe(dest(dir+'/'))
 		.on("end", cb)
-
-	/*function checkCompletion(){
-		if (num <= 0) num ++;
-		else cb();
-	}*/
 }
-
 
 // Copy the source dsk image (name should be the same as project name + .DSK)
 function dsk(cb) {
@@ -42,45 +48,123 @@ function dsk(cb) {
 		.on("end", cb)
 }
 
+// Copy the source folder to allow manipulation in place and easier cleaning afterwards
+function tmp(cb) {
+	src(`src/*`, { allowEmpty: true })
+		.pipe(dest('public/tmp/'))
+		.on("end", cb)
+}
 
-// Copy any BIN files if needed, currently we supply the files with prepopulated source DSK.
+// Copy any BIN files if needed (images automation?), currently we supply the files with prepopulated source DSK.
 /*function bin(cb) {
-	executeJava(`java -jar ac.jar -p public/json/disks/GRIDLOCK.dsk TITLE bin 0x2000 < bin/title.A2FC`, () => {
-		executeJava(`java -jar ac.jar -p public/json/disks/GRIDLOCK.dsk MOON bin 0x2000 < bin/moon.A2FC`, cb);
+	executeJava(`java -jar ${appleCommander} -p public/json/disks/GRIDLOCK.dsk TITLE bin 0x2000 < bin/title.A2FC`, () => {
+		executeJava(`java -jar ${appleCommander} -p public/json/disks/GRIDLOCK.dsk MOON bin 0x2000 < bin/moon.A2FC`, cb);
 	});
 }*/
 
-
-// Transfer a text file in the tokenized BAS format to insert in the DSK
-function bas(cb) {
-	executeJava(`java -jar ac.jar -bas public/json/disks/${title}.dsk STARTUP bas 0x800 < src/startup.bas`, cb);
+// When all src files are compiled we delete the temporary folder
+function checkCompilation() {
+	var check = true;
+	for (var i = 0; i < bascallbacks.length; i ++) {
+		if (!bascallbacks[i]) check = false;
+	}
+	for (var i = 0; i < bincallbacks.length; i ++) {
+		if (!bincallbacks[i]) check = false;
+	}
+	if (check) {
+		console.log(`""`);
+		console.log(`Compilation complete. http://localhost:8080/json/disks/${title}.dsk`);
+		console.log(`""`);
+		del(`public/tmp`, {force:true});
+	}
+	return check;
 }
 
+// Compile all files in src/ folder (.bas, .s, .asm)
+function files(cb) {
+	const files = fs.readdirSync('public/tmp/');
+	files.forEach(file => {
+		let name = file.substring(0, file.length-4).toUpperCase();
+		if (file.toLowerCase().indexOf('.bas') > -1) {
+			// Compile a basic text file (.bas) into the tokenized BAS format and into inside the DSK
+			// ========================================================================================
+			bas.push(file);
+			bascallbacks.push(false);
+			executeJava(`java -jar ${appleCommander} -bas public/json/disks/${title}.dsk ${name} bas 0x800 < public/tmp/${file}`, e => {
+				console.log(`Compiled BASIC file: ${name} at $800 from public/tmp/${file}`);
+				bascallbacks[bas.indexOf(file)] = true;
+				if (checkCompilation()) cb();
+			});
+		} else if (file.toLowerCase().indexOf('.s') > -1) {
+			// Compile an assembly source text file (.s) into a BIN format with Merin 32 and insert into the DSK
+			// ==================================================================================================
+			name = file.substring(0, file.length-2).toUpperCase();
+			bin.push(file);
+			bincallbacks.push(false);
+			let _address;
+			// Determine the starting address of the binary data
+			fs.readFile("public/tmp/" +file, 'utf8', (err, data) => {
+				if (err) {
+					console.error(err);
+					return;
+				}
+				var index = data.indexOf("ORG");
+				if (index == -1) {
+					_address = address;
+				} else {
+					_address = "";
+					while (_address.length < 4) {
+						if (parseInt(data[index + 1], 16) || parseInt(data[index + 1], 16) == 0) _address += data[index + 1];
+						index ++;
+					}
+				}
+			});
+			// Use Merlin 32 to compile
+			const execFile = require('child_process').execFile;
+			const merlinProcess = execFile(merlin, ['-V', '/', `public/tmp/${file}`]);
+			//merlinProcess.stdout.on('data', (data) => console.log(data));
+			merlinProcess.stderr.on('data', (data) => { console.error(`Merlin 32 error: ${data}`); });
+			merlinProcess.on('close', (code) => {
+				executeJava(`java -jar ${appleCommander} -p public/json/disks/${title}.dsk ${name} bin 0x${_address} < public/tmp/${name}`, e => {
+					console.log(`Compiled BINARY file: ${name} at $${_address} from public/tmp/${file}`);
+					bincallbacks[bin.indexOf(file)] = true;
+					if (checkCompilation()) cb();
+				});
+			});
+		} else if (file.toLowerCase().indexOf('.asm') > -1) {
+			// Compile an assembly raw text file (.asm) into a BIN format with Retro Assembler and insert into the DSK
+			// ========================================================================================================
+			bin.push(file);
+			bincallbacks.push(false);
+			// Use Retro Assembler to compile
+			const { spawn } = require('child_process');
+			const retroAsmProcess = spawn(retroassembler, [`public/tmp/${file}`, `public/tmp/${name}.bin`]);
+			//retroAsmProcess.stdout.on('data', (data) => console.log(data));
+			retroAsmProcess.stderr.on('data', (data) => { console.error(`Retro Assembler error: ${data}`); });
+			retroAsmProcess.on('close', (code) => {
+				executeJava(`java -jar ${appleCommander} -p public/json/disks/${title}.dsk ${name} bin 0x${_address} < public/tmp/${name}.bin`, e => {
+					console.log(`Compiled BINARY file: ${name} at $${_address} from public/tmp/${file}`);
+					bincallbacks[bin.indexOf(file)] = true;
+					if (checkCompilation()) cb();
+				});
+			});
+		} else {
+			console.log("File " + file + " format unknown! (" + file.substring(file.length-4) + ") ");
+		}
+	});
+}
 
-// Maybe we want to test on AppleWin? for example the Mouse interface does not work on the web emulator.
-function appleWin(cb) {
+// Do we want to test on AppleWin? for example the Mouse interface does not work on the web emulator.
+/*function appleWin(cb) {
 	// run AppleWin directly (temporary solution)
 	const { spawn } = require('child_process');
 	const path = require('path');
-
-	const appleWinPath = 'C:/Standalone/AppleWin/AppleWin.exe';
-	const dskFilePath = `public/json/disks/${title}.dsk`;
-
-	const appleWinProcess = spawn(appleWinPath, [dskFilePath]);
-
+	const appleWinProcess = spawn(appleWin, [`public/json/disks/${title}.dsk`]);
 	// Optional: Handle events from the spawned process
-	appleWinProcess.stdout.on('data', (data) => {
-		console.log(`stdout: ${data}`);
-	});
-
-	appleWinProcess.stderr.on('data', (data) => {
-		console.error(`stderr: ${data}`);
-	});
-
-	appleWinProcess.on('close', (code) => {
-		console.log(`child process exited with code ${code}`);
-	});
-}
+	appleWinProcess.stdout.on('data', (data) => console.log(`stdout: ${data}`));
+	appleWinProcess.stderr.on('data', (data) => console.error(`stderr: ${data}`));
+	appleWinProcess.on('close', (code) => console.log(`child process exited with code ${code}`));
+}*/
 
 // execute scripts'n stuff
 function executeJava(cmdCode, cb) {
@@ -93,13 +177,11 @@ function executeJava(cmdCode, cb) {
 	);
 }
 
-
-// Delete the temporary folder generated during packaging
+// Delete the public folder generated with each build
 function clean(callback) {
 	del(dir+'/**/*', {force:true});
 	callback();
 }
-
 
 // Watch for changes in the source folder
 function watch(callback) {
@@ -144,8 +226,8 @@ function getDateString(shorter) {
 }
 
 // Exports
-exports.default = series(clean, app, dsk, bas, watch);
-exports.sync = series(clean, app, dsk, bas, reload);
+exports.default = series(clean, app, dsk, tmp, files, watch);
+exports.sync = series(clean, app, dsk, tmp, files, reload);
 
 /*
    Gulpfile by Noncho Savov

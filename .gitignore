@@ -1,8 +1,9 @@
 node_modules
 public
-package-lock.json
+bin
+tmp
 emulator
+package-lock.json
 .vscode
 .github
 .git
-ac.jar
