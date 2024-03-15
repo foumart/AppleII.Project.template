@@ -27,8 +27,10 @@ const retroassembler = "C:/Standalone/AppleWin/retroassembler/retroassembler.exe
 // temporary vars used during build
 const bas = [];// holds bas file names found in src/
 const bin = [];// holds bin file names found in src/
+const txt = [];// holds txt file names found in src/
 const bascallbacks = [];// holds if the corresponding basic file compilation process is complete or not
 const bincallbacks = [];// holds if the corresponding binary file compilation process is complete or not
+const txtcallbacks = [];// holds if the corresponding text file compilation process is complete or not
 let currentfile;
 let allfiles;
 
@@ -38,9 +40,16 @@ let allfiles;
 
 // Copy the Apple II web emulator
 function app(cb) {
-	src('emulator/**/*', { allowEmpty: true })
-		.pipe(dest(dir+'/'))
-		.on("end", cb)
+	var emulatorPath = 'emulator/';
+	fs.access(emulatorPath, fs.constants.F_OK, (err) => {
+		if (err) {
+			throw new Error("Please copy the emulator!");
+		} else {
+			src('emulator/**/*', { allowEmpty: true })
+				.pipe(dest(dir+'/'))
+				.on("end", cb)
+		}
+	});
 }
 
 // Copy the source dsk image (name should be the same as project name + .DSK)
@@ -78,6 +87,16 @@ function readFile(files, cb) {
 	if (file.toLowerCase().indexOf('.bas') > -1) {
 		// Compile a basic text file (.bas) into the tokenized BAS format and insert into the DSK
 		// =======================================================================================
+
+		// Remove all REM comments in the basic file
+		let basic = fs.readFileSync("public/tmp/"+file, 'utf8');
+		let regex = /^(?:\d+\s+)?REM.*|(:\s*)?REM.*|^\d+\s*$/gm;
+		basic = "0 REM " + title + " by Noncho Savov\r\n" + basic.replace(regex, ""); // remove REM comments
+		// Overwrite the file in tmp/
+		fs.writeFile("public/tmp/"+file, basic, function(err) {
+			if (err) throw err;
+		});
+
 		bas.push(file);
 		bascallbacks.push(false);
 		executeJava(`java -jar ${appleCommander} -bas public/json/disks/${title}.dsk ${name} bas 0x800 < public/tmp/${file}`, e => {
@@ -153,6 +172,20 @@ function readFile(files, cb) {
 				}
 			});
 		});
+	} else if (file.toLowerCase().indexOf('.txt') > -1) {
+		// Compile a pure text file (.txt) and insert into the DSK
+		// ========================================================
+		txt.push(file);
+		txtcallbacks.push(false);
+		executeJava(`java -jar ${appleCommander} -ptx public/json/disks/${title}.dsk ${name} txt < public/tmp/${name}.txt`, e => {
+			console.log(`Copied TXT file: ${name} from public/tmp/${file}`);
+			txtcallbacks[txt.indexOf(file)] = true;
+			if (checkCompilation()) cb();
+			else {
+				if (currentfile ++>= allfiles) cb();
+				else readFile(files, cb);
+			}
+		});
 	} else {
 		console.log("File " + file + " format unknown! (" + file.substring(file.length-4) + ") ");
 	}
@@ -167,6 +200,9 @@ function checkCompilation() {
 	}
 	for (var i = 0; i < bincallbacks.length; i ++) {
 		if (!bincallbacks[i]) check = false;
+	}
+	for (var i = 0; i < txtcallbacks.length; i ++) {
+		if (!txtcallbacks[i]) check = false;
 	}
 	if (check) {
 		//console.log(`""`);
