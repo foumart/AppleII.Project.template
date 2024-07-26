@@ -14,9 +14,9 @@
 
 ### Relies on Apple2js emulator to run Apple II in the web browser.
 
-1. Download my adaptation over Will Scullin's emulator: https://foumartgames.com/extensions/AppleII/emulator.zip
-2. Or get the latest emulator from whscullin github at: https://github.com/whscullin/apple2js
-3. Make sure you have an emulator/ folder in the root of your project - it will be copied during build..
+1. Download my 2017 adaptation over Will Scullin's JS emulator: https://foumartgames.com/extensions/AppleII/emulator.zip
+2. Or get the latest emulator from Will Scullin's github at: https://github.com/whscullin/apple2js
+3. Make sure you have an emulator/ folder in the root of your project - it will be copied during build.
 
 ## Installation and Build
 
@@ -34,9 +34,3 @@
 #### Useful for Development:
 
 - Live reload - the web Emulator will restart with any change you perform within the src/ folder.
-
-#### TODO:
-
-1. Improve the current demo. Loading a Double Hi-res picture is nice, now developing a mouse cursor interface in assembly..
-2. The plotting only works if there is mouse interface available on the system, BASIC seems very slow for any mouse input handling - mouse interactions should be written in Assembly - check the binary demo MOUSE.
-3. The plotting is currently only done on the first PAGE - to check how to utilize both pages and to do a benchmark on fastest sprite drawing routine.. 
