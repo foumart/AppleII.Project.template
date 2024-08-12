@@ -5,6 +5,7 @@
 	"main": "src/scripts/app.js",
 	"scripts": {
 		"build": "npx del-cli public --force && gulp",
+		"dev": "npx del-cli public --force && gulp --debug",
 		"start": "npx del-cli public --force && gulp sync"
 	},
 	"resolutions": {
