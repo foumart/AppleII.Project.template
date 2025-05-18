@@ -12,11 +12,13 @@
 3. If you want to compile raw ASM, download RetroAssembler from https://enginedesigns.net/retroassembler/
 4. Update the _retroassembler_ linkage in gulpfile.js
 
-### Relies on Apple2js emulator to run Apple II in the web browser.
+### Relies on Apple2jse emulator to run Apple //e in the web browser.
 
-1. Download my 2017 adaptation over Will Scullin's JS emulator: https://foumartgames.com/extensions/AppleII/emulator.zip
-2. Or get the latest emulator from Will Scullin's github at: https://github.com/whscullin/apple2js
-3. Make sure you have an emulator/ folder in the root of your project - it will be copied during build.
+1. Download my adaptation of Will Scullin's JS emulator: https://foumartgames.com/extensions/AppleII/emulator.zip
+2. Make sure you have an emulator/ folder in the root of your project - it will be copied during build.
+  - Will Scullin's **Apple2js** emulator is at github: https://github.com/whscullin/apple2js.
+  - My custom fork: https://github.com/foumart/apple2js
+
 
 ## Installation and Build
 
@@ -25,12 +27,12 @@
 
 ### What does a build do:
 
-1. Cleans (or creates) a public/ folder and prepares it for a new build.
-2. Copies the emulator/ to the public/ folder.
-3. Copies the source DSK image from dsk/ as well (disk image have the same name as the project).
+1. Cleans (or creates) a `public/` folder and prepares it for a new build.
+2. Copies the `emulator/` to the `public/` folder.
+3. Copies the source DSK image from `dsk/` into `emulator/json/disks/` (disk image have the same name as the project).
 4. Converts all source files (.bas, .s, .asm) into the needed format for Apple II (BAS, BIN) and writes them on disk.
 5. Starts or Syncs the Apple II emulator - it will load the disk at boot and should try to run a basic STARTUP file right away.
 
 #### Useful for Development:
 
-- Live reload - the web Emulator will restart with any change you perform within the src/ folder.
+- Live reload - the web Emulator will restart with any change you perform within the `src/` folder.
