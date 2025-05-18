@@ -14,9 +14,11 @@
 
 ### Relies on Apple2jse emulator to run Apple //e in the web browser.
 
-1. Download my adaptation of Will Scullin's JS emulator: https://foumartgames.com/extensions/AppleII/emulator.zip
-2. Make sure you have an emulator/ folder in the root of your project - it will be copied during build.
-  - Will Scullin's **Apple2js** emulator is at github: https://github.com/whscullin/apple2js.
+1. Download the Apple2js emulator: https://foumartgames.com/extensions/AppleII/emulator.zip
+2. Extract the archive into emulator/ folder in the root of your project.
+
+- Links:
+  - Will Scullin's **Apple2js** emulator at github: https://github.com/whscullin/apple2js.
   - My custom fork: https://github.com/foumart/apple2js
 
 
