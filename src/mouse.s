@@ -8,7 +8,6 @@
 ********************************
 * FOR MERLIN COMPILER
 * SOURCE: https://www.applefritter.com/appleii-box/APPLE2/AppleMouseII/AppleMouseII.pdf
-* MODIFIED TO USE BLITLIB FOR SPRITE DRAWING
 *
 PTR = $06 ;POINTER, TEMP STORAGE
 CH = $24 ;COLUMN
@@ -33,20 +32,6 @@ XH = $578
 YH = $5F8
 BUTTON = $778
 *
-* BLITLIB EQUATES:
-*
-BLITLIB = $6000 ;BLITLIB entry point
-BLIT_CALL = $6000 ;BLITLIB call address
-BLIT_SRCX = $6003 ;Source X (byte offset)
-BLIT_SRCY = $6004 ;Source Y (pixel)
-BLIT_HEIGHT = $6006 ;Height in pixels
-BLIT_DESTY = $6009 ;Destination Y
-BLIT_DESTXH = $600A ;Destination X high byte
-BLIT_DESTXL = $600B ;Destination X low byte
-BLIT_WIDTH = $600C ;Width in pixels
-BLIT_MODE = $6012 ;Blit mode (0 = pixel-aligned)
-BLIT_OVERWRITE = $6013 ;Overwrite mode (0 = overwrite)
-*
 * OFFSETS TO MOUSE ENTRY POINTS:
 *
 SETMSE = $12
@@ -59,7 +44,7 @@ INITMSE = $19
 ********************************
 *        INITIALIZE            *
 ********************************
- JSR TEXT ;SET TEXT MODE
+* JSR TEXT ;SET TEXT MODE
  JSR CHKMOUSE ;CHECK FOR MOUSE FIRMWARE
  LDA #$91 ;CTRL-Q
  JSR COUT ;SET 40 COL
@@ -88,7 +73,7 @@ TRACKMOUS LDY #READMSE
  BCC IN2 ;SET INITIAL CURSOR (ALWAYS)
 IN1 LDY #READMSE
  JSR CALLFIRM ;Read Mouse position
- JSR DRAWSPRITE ;Draw sprite at mouse position
+ JSR PRTDATA ;Print data to screen
  LDA BUTTON,Y ;Get Mouse button status
  LDY CH
  AND #%00100000 ;TEST BIT 5
@@ -115,103 +100,6 @@ IN3 LDA #"^"
  JSR TABV
  JSR CROUT
  JMP DOSWARM ;Exit to Applesoft
-*********************************
-* DRAW SPRITE AT MOUSE POSITION
-*********************************
-DRAWSPRITE LDY N ;Slot offset
- LDA XH,Y ;Hi byte X-coordinate
- LDX XL,Y ;Lo byte X-coordinate
- JSR SCALEX ;Scale X coordinate for graphics
- STA MOUSE_X
- STX MOUSE_X+1
- LDY N ;Slot offset
- LDA YH,Y ;Hi byte Y-coordinate
- LDX YL,Y ;Lo byte Y-coordinate
- JSR SCALEY ;Scale Y coordinate for graphics
- STA MOUSE_Y
-*
-* Set up BLITLIB parameters
-*
- LDA #12 ;Width in pixels
- STA BLIT_WIDTH
- LDA #12 ;Height in pixels
- STA BLIT_HEIGHT
-*
-* Set destination X/Y
-*
- LDA MOUSE_X+1 ;Low byte of X
- STA BLIT_DESTXL
- LDA MOUSE_X ;High byte of X
- STA BLIT_DESTXH
- LDA MOUSE_Y ;Y coordinate
- STA BLIT_DESTY
-*
-* Set blit mode and overwrite
-*
- LDA #0 ;Mode 0 = pixel-aligned
- STA BLIT_MODE
- LDA #0 ;Overwrite mode
- STA BLIT_OVERWRITE
-*
-* Set source coordinates (Bird Frame 1)
-*
- LDA #1 ;Source X (byte offset)
- STA BLIT_SRCX
- LDA #30 ;Source Y (pixel)
- STA BLIT_SRCY
-*
-* Call BLITLIB
-*
- JSR BLIT_CALL
- RTS
-*********************************
-* SCALE X COORDINATE FOR GRAPHICS
-*********************************
-* Input: A = high byte, X = low byte of mouse X (0-959)
-* Output: A = high byte, X = low byte of scaled X (0-279)
-*
-SCALEX PHA ;Save high byte
- TXA ;Get low byte
- LDX #0 ;Clear high byte for division
- LDY #3 ;Divide by 3.7 (approximately 3.4)
-SCALEX1 CMP #3
- BCC SCALEX2
- SBC #3
- INX
- BNE SCALEX1
-SCALEX2 STA MOUSE_X+1 ;Save low byte
- PLA ;Get original high byte
- CMP #3 ;Check if we need to scale high byte
- BCC SCALEX3
- LDA #0 ;Max out at 279
- LDX #$17 ;High byte of 279
- BNE SCALEX4
-SCALEX3 LDA #0 ;High byte is 0 for most cases
-SCALEX4 STA MOUSE_X ;Save high byte
- RTS
-*********************************
-* SCALE Y COORDINATE FOR GRAPHICS
-*********************************
-* Input: A = high byte, X = low byte of mouse Y (0-959)
-* Output: A = scaled Y (0-191)
-*
-SCALEY PHA ;Save high byte
- TXA ;Get low byte
- LDX #0 ;Clear high byte for division
- LDY #5 ;Divide by 5.4 (approximately 5)
-SCALEY1 CMP #5
- BCC SCALEY2
- SBC #5
- INX
- BNE SCALEY1
-SCALEY2 STA MOUSE_Y ;Save result
- PLA ;Get original high byte
- CMP #1 ;Check if we need to scale high byte
- BCC SCALEY3
- LDA #191 ;Max out at 191
- BNE SCALEY4
-SCALEY3 LDA #0 ;High byte is 0 for most cases
-SCALEY4 RTS
 *********************************
 *SET CURSOR POS
 *********************************
@@ -261,6 +149,48 @@ SETCLAMP LDA #0 ;Min=0
  STA YH
  RTS
 *********************************
+* PRINT Data Line TO SCReeN
+*********************************
+PRTDATA LDA CV
+ PHA ;Save entry row
+ LDA CH
+ PHA ;Save entry column
+ LDA #22
+ JSR TABV
+ LDA #5
+ STA CH
+ LDY N ;Slot offset
+ LDA XH,Y ;Hi byte X-coordinate
+ LDX XL,Y ;Lo byte X-coordinate
+ JSR LINPRT ;Print X-coordinate
+ JSR PRBLNK
+ LDA #15
+ STA CH
+ LDY N ;Slot offset
+ LDA YH,Y ;Hi byte Y-coordinate
+ LDX YL,Y ;Lo bytre Y-coordinate
+ JSR LINPRT ;Print Y-coordinate
+ JSR PRBLNK
+ LDA #26
+ STA CH
+ LDY N ;Slot offset
+ LDA BUTTON,Y
+ LDX #8 ;Bit counter
+IN8 ASL
+ PHA
+ BCC IN9 ;Clear bit found
+ LDA #"1" ;Set bit found
+ HEX 2C ;Skip next 2 bytes
+IN9 LDA #"0"
+ JSR COUT ;Print bit status
+ PLA
+ DEX ;Decrement bit counter
+ BPL IN8 ;Get another bit
+ PLA
+ STA CH ;Restore entry column
+ PLA
+ JMP TABV ;Restore entry row
+*********************************
 * CALL MOUSE FIRMWARE:
 *********************************
 * ENTRY CONDITIONS:
@@ -279,13 +209,15 @@ FIRMADR JMP $0000 ;Set by CHKMOUSE & CALLFIRM
 * FORMAT SCREEN:
 *********************************
 FMTSCR JSR HOME
+ LDA #20
+ JSR TABV
  LDX #0
 INA LDA TXHDR,X ;Print header
  BEQ INB
  JSR COUT
  INX
  BNE INA ;Always
-INB LDA #3
+INB LDA #22
  JSR TABV
  LDA #3
  STA CH
@@ -308,7 +240,7 @@ INB LDA #3
  LDA #"%"
  JMP COUT
 *
-TXHDR ASC "*** APPLEMOUSE TRACKING STATION ***"
+TXHDR ASC "  *** APPLE MOUSE TRACKING STATION ***"
  DFB 00
 **********************************
 * CHECK SLOTS FOR MOUSE FIRMWARE
@@ -370,5 +302,3 @@ N DS 1,0 ;Slot #
 CN DS 1,0 ;X-reg setup
 N0 DS 1,0 ;Y-reg setup
 OLDCHAR DS 1,0 ;Screen char replaced by cursor
-MOUSE_X DS 2,0 ;Scaled mouse X coordinate (16-bit)
-MOUSE_Y DS 1,0 ;Scaled mouse Y coordinate (8-bit)
