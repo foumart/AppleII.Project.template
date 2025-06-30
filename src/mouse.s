@@ -56,6 +56,7 @@ SCDYLO = $7406
 SCDYHI = $7407
 *
 * BLITLIB PARAMETER ADDRESSES
+BLITLIB = $6000
 B_WDTH  = $600C
 B_HGHT  = $6006
 B_DXLO  = $600B
@@ -101,8 +102,56 @@ B_SRCY  = $6004
 IN1 LDY #READMSE
  JSR CALLFRM ;Read Mouse position
  JSR PRTDATA ;Print data to screen
- ; --- Load and scale mouse coordinates for BLITLIB ---
- LDY N ; Slot offset
+ JSR SETCOR
+ JSR DRWCUR
+ JSR BLITLIB
+ LDA BUTTON,Y ;Get Mouse button status
+ LDY CH
+ AND #%00100000 ;TEST BIT 5
+ BEQ IN3 ;X,Y unchanged
+ LDA OLDCHAR ;X,Y changed so
+ STA (BASL),Y ; restore screen char
+IN2 JSR SETPOSN ;Set cursor position
+ LDA (BASL),Y
+ STA OLDCHAR ;Save screen char
+IN3 LDA #"^"
+ STA (BASL),Y ;Print cursor
+ BIT KBD ;Check keypress
+ BPL IN1 ;No keypress, Loop back
+********************************
+* QUIT
+********************************
+ BIT STROBE ;Reset keyboard strobe
+ LDA OLDCHAR
+ STA (BASL),Y ;Kill cursorY
+ LDY #SETMSE
+ LDA #0
+ JSR CALLFRM ;Turn Mouse off
+ LDA #4
+ JSR TABV
+ JSR CROUT
+ JMP DOSWARM ;Exit to Applesoft
+* Draw graphic cursor
+DRWCUR LDA #$54         ; width in pixels (example: bird image)
+ STA $600C
+ LDA #$37         ; height in pixels (example: bird image)
+ STA $6006
+ LDA SCDXHI      ; dest X high byte (0 or 1)
+ STA $600B
+ LDA SCDXLO      ; dest X low byte (0–255)
+ STA $600A
+ LDA SCDYLO      ; dest Y (0–191)
+ STA $6009
+ LDA #$01          ; byte-level blit mode
+ STA $6012
+ LDA #$00          ; overwrite mode
+ STA $6013
+ LDA #$01          ; source X byte offset (from docs)
+ STA $6003
+ LDA #$1E         ; source Y offset (from docs)
+ STA $6004
+ RTS
+SETCOR LDY N ; Slot offset
  LDA XL,Y
  STA TMPXLO
  LDA XH,Y
@@ -111,7 +160,7 @@ IN1 LDY #READMSE
  STA TMPYLO
  LDA YH,Y
  STA TMPYHI
- ; Scale X = X / 4
+* ; Scale X = X / 4
  LDA TMPXHI
  LSR A
  LSR A
@@ -120,7 +169,7 @@ IN1 LDY #READMSE
  ROR A
  ROR A
  STA SCDXLO
- ; Scale Y = Y / 5 (approximate: Y/4 + Y/16)
+* ; Scale Y = Y / 5 (approximate: Y/4 + Y/16)
  LDA TMPYHI
  LSR A
  LSR A
@@ -129,7 +178,7 @@ IN1 LDY #READMSE
  ROR A
  ROR A
  STA SCDYLO
- ; Add Y/16
+* ; Add Y/16
  LDA TMPYHI
  LSR A
  LSR A
@@ -146,58 +195,7 @@ IN1 LDY #READMSE
  CLC
  ADC SCDYLO
  STA SCDYLO
- LDA BUTTON,Y ;Get Mouse button status
- LDY CH
- AND #%00100000 ;TEST BIT 5
- BEQ IN3 ;X,Y unchanged
- LDA OLDCHAR ;X,Y changed so
- STA (BASL),Y ; restore screen char
-IN2 JSR SETPOSN ;Set cursor position
- LDA (BASL),Y
- STA OLDCHAR ;Save screen char
-IN3 LDA #"^"
- STA (BASL),Y ;Print cursor
- BIT KBD ;Check keypress
- BPL IN1 ;No keypress, Loop back
- ; --- Set up BLITLIB parameters (do not call yet) ---
- ; Width: $600C = 12
- LDA #12
- STA $600C
- ; Height: $6006 = 12
- STA $6006
- ; Dest X lo: $600B
- LDA SCDXLO
- STA $600B
- ; Dest X hi: $600A
- LDA SCDXHI
- STA $600A
- ; Dest Y: $6009
- LDA SCDYLO
- STA $6009
- ; Mode: $6012 = 0 (pixel-aligned)
- LDA #0
- STA $6012
- ; Overwrite: $6013 = 0
- STA $6013
- ; Source X: $6003 = 1
- LDA #1
- STA $6003
- ; Source Y: $6004 = 30
- LDA #30
- STA $6004
-********************************
-* QUIT
-********************************
- BIT STROBE ;Reset keyboard strobe
- LDA OLDCHAR
- STA (BASL),Y ;Kill cursorY
- LDY #SETMSE
- LDA #0
- JSR CALLFRM ;Turn Mouse off
- LDA #4
- JSR TABV
- JSR CROUT
- JMP DOSWARM ;Exit to Applesoft
+ RTS
 *********************************
 *SET CURSOR POS
 *********************************

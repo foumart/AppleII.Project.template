@@ -136,6 +136,9 @@ function readFile(files, cb) {
 			const execFile = require('child_process').execFile;
 			const merlinProcess = execFile(merlin, ['-V', '/', `public/tmp/${file}`]);
 			if (debug) merlinProcess.stdout.on('data', (data) => console.log(data));
+			merlinProcess.stdout.on('data', (data) => {
+				console.log(`stdout: ${data}`);
+			});
 			merlinProcess.stderr.on('data', (data) => { console.error(`Merlin 32 error: ${data}`); });
 			merlinProcess.on('close', (code) => {
 				console.log(`Compiled BINARY file: ${name} at $${_address} from public/tmp/${file}`);
@@ -148,6 +151,11 @@ function readFile(files, cb) {
 						else readFile(files, cb);
 					}
 				});
+			});
+			merlinProcess.on('exit', (code, signal) => {
+				if (code !== 0) {
+					console.error(`Merlin32 exited with code ${code} and signal ${signal}`);
+				}
 			});
 		});
 	} else if (file.toLowerCase().indexOf('.asm') > -1) {
@@ -208,7 +216,7 @@ function checkCompilation() {
 		//console.log(`""`);
 		console.log(`Compilation complete. http://localhost:8080/json/disks/${title}.dsk`);
 		//console.log(`""`);
-		del(`public/tmp`, {force:true});
+		//del(`public/tmp`, {force:true});
 	}
 	return check;
 }
