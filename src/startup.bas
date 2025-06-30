@@ -74,7 +74,7 @@
 24100  rem  CALL 768 : REM Call Mouse binary
 24150  IF DB% = 1 THEN PRINT "=>MOUSE"
 24160  PRINT D$"BLOAD MOUSE"
-24200  CALL 24576 : REM Call Mouse binary
+24200  CALL 29952 : REM Call Mouse binary at $7500
 
 25000  GET A$
 25100  IF A$ = CHR$ (13) THEN TEXT 
