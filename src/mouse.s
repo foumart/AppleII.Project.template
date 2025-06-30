@@ -160,41 +160,77 @@ SETCOR LDY N ; Slot offset
  STA TMPYLO
  LDA YH,Y
  STA TMPYHI
-* ; Scale X = X / 4
+; --- Improved Scale X: MouseX (0–959) to HGR X (0–279) ---
  LDA TMPXHI
  LSR A
  LSR A
  STA SCDXHI
  LDA TMPXLO
- ROR A
- ROR A
+ LSR A
+ LSR A
  STA SCDXLO
-* ; Scale Y = Y / 5 (approximate: Y/4 + Y/16)
- LDA TMPYHI
- LSR A
- LSR A
- STA SCDYHI
- LDA TMPYLO
- ROR A
- ROR A
- STA SCDYLO
-* ; Add Y/16
- LDA TMPYHI
+ ; Add MouseX / 16 (16-bit add)
+ LDA TMPXLO
  LSR A
  LSR A
  LSR A
  LSR A
  CLC
- ADC SCDYHI
+ ADC SCDXLO
+ STA SCDXLO
+ LDA TMPXHI
+ LSR A
+ LSR A
+ LSR A
+ LSR A
+ ADC SCDXHI
+ STA SCDXHI
+ ; Clamp SCDX to 0–279
+ LDA SCDXHI
+ CMP #$01
+ BCC OK_X
+ BNE CLAMP_X
+ LDA SCDXLO
+ CMP #$17
+ BCC OK_X
+CLAMP_X
+ LDA #$17 ; 279 decimal
+ STA SCDXLO
+ LDA #$01
+ STA SCDXHI
+OK_X
+; --- Improved Scale Y: MouseY (0–639) to HGR Y (0–191) ---
+ LDA TMPYHI
+ LSR A
+ LSR A
  STA SCDYHI
  LDA TMPYLO
- ROR A
- ROR A
- ROR A
- ROR A
+ LSR A
+ LSR A
+ STA SCDYLO
+ ; Add MouseY / 16 (16-bit add)
+ LDA TMPYLO
+ LSR A
+ LSR A
+ LSR A
+ LSR A
  CLC
  ADC SCDYLO
  STA SCDYLO
+ LDA TMPYHI
+ LSR A
+ LSR A
+ LSR A
+ LSR A
+ ADC SCDYHI
+ STA SCDYHI
+ ; Clamp SCDY to 0–191
+ LDA SCDYLO
+ CMP #$C0 ; 192
+ BCC OK_Y
+ LDA #$BF ; 191
+ STA SCDYLO
+OK_Y
  RTS
 *********************************
 *SET CURSOR POS
