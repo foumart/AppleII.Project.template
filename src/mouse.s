@@ -101,6 +101,51 @@ B_SRCY  = $6004
 IN1 LDY #READMSE
  JSR CALLFRM ;Read Mouse position
  JSR PRTDATA ;Print data to screen
+ ; --- Load and scale mouse coordinates for BLITLIB ---
+ LDY N ; Slot offset
+ LDA XL,Y
+ STA TMPXLO
+ LDA XH,Y
+ STA TMPXHI
+ LDA YL,Y
+ STA TMPYLO
+ LDA YH,Y
+ STA TMPYHI
+ ; Scale X = X / 4
+ LDA TMPXHI
+ LSR A
+ LSR A
+ STA SCDXHI
+ LDA TMPXLO
+ ROR A
+ ROR A
+ STA SCDXLO
+ ; Scale Y = Y / 5 (approximate: Y/4 + Y/16)
+ LDA TMPYHI
+ LSR A
+ LSR A
+ STA SCDYHI
+ LDA TMPYLO
+ ROR A
+ ROR A
+ STA SCDYLO
+ ; Add Y/16
+ LDA TMPYHI
+ LSR A
+ LSR A
+ LSR A
+ LSR A
+ CLC
+ ADC SCDYHI
+ STA SCDYHI
+ LDA TMPYLO
+ ROR A
+ ROR A
+ ROR A
+ ROR A
+ CLC
+ ADC SCDYLO
+ STA SCDYLO
  LDA BUTTON,Y ;Get Mouse button status
  LDY CH
  AND #%00100000 ;TEST BIT 5
@@ -114,6 +159,32 @@ IN3 LDA #"^"
  STA (BASL),Y ;Print cursor
  BIT KBD ;Check keypress
  BPL IN1 ;No keypress, Loop back
+ ; --- Set up BLITLIB parameters (do not call yet) ---
+ ; Width: $600C = 12
+ LDA #12
+ STA $600C
+ ; Height: $6006 = 12
+ STA $6006
+ ; Dest X lo: $600B
+ LDA SCDXLO
+ STA $600B
+ ; Dest X hi: $600A
+ LDA SCDXHI
+ STA $600A
+ ; Dest Y: $6009
+ LDA SCDYLO
+ STA $6009
+ ; Mode: $6012 = 0 (pixel-aligned)
+ LDA #0
+ STA $6012
+ ; Overwrite: $6013 = 0
+ STA $6013
+ ; Source X: $6003 = 1
+ LDA #1
+ STA $6003
+ ; Source Y: $6004 = 30
+ LDA #30
+ STA $6004
 ********************************
 * QUIT
 ********************************
