@@ -132,9 +132,9 @@ IN3 LDA #"^"
  JSR CROUT
  JMP DOSWARM ;Exit to Applesoft
 * Draw graphic cursor
-DRWCUR LDA #$54         ; width in pixels (example: bird image)
+DRWCUR LDA #$07         ; width in pixels
  STA $600C
- LDA #$37         ; height in pixels (example: bird image)
+ LDA #$07         ; height in pixels
  STA $6006
  LDA SCDXHI      ; dest X high byte (0 or 1)
  STA $600B
@@ -142,14 +142,21 @@ DRWCUR LDA #$54         ; width in pixels (example: bird image)
  STA $600A
  LDA SCDYLO      ; dest Y (0–191)
  STA $6009
- LDA #$00        ; XOR mode
+ LDA #$01        ; XOR mode; Bite-level blit mode
  STA $6012
  LDA #$00        ; overwrite mode
  STA $6013
- LDA #$01        ; source X byte offset (from docs)
+ LDA #$00        ; source X byte offset
  STA $6003
- LDA #$1E        ; source Y offset (from docs)
- STA $6004
+; Calculate source Y offset as (SCDXHI % 8) * 7
+ LDA SCDXLO
+ AND #$07      ; SCDXLO % 8
+ ASL A         ; *2
+ ADC SCDXLO    ; *3 (A = 2A + A = 3A)
+ ASL A         ; *6
+ CLC
+ ADC SCDXLO    ; *7
+ STA $6004     ; BLIT
  RTS
 SETCOR LDY N ; Slot offset
  LDA XL,Y
