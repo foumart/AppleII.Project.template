@@ -142,13 +142,13 @@ DRWCUR LDA #$54         ; width in pixels (example: bird image)
  STA $600A
  LDA SCDYLO      ; dest Y (0–191)
  STA $6009
- LDA #$01          ; byte-level blit mode
+ LDA #$00        ; XOR mode
  STA $6012
- LDA #$00          ; overwrite mode
+ LDA #$00        ; overwrite mode
  STA $6013
- LDA #$01          ; source X byte offset (from docs)
+ LDA #$01        ; source X byte offset (from docs)
  STA $6003
- LDA #$1E         ; source Y offset (from docs)
+ LDA #$1E        ; source Y offset (from docs)
  STA $6004
  RTS
 SETCOR LDY N ; Slot offset
@@ -160,7 +160,8 @@ SETCOR LDY N ; Slot offset
  STA TMPYLO
  LDA YH,Y
  STA TMPYHI
-; --- Improved Scale X: MouseX (0–959) to HGR X (0–279) ---
+; --- X: MouseX (0–959) to HGR X (0–279) ---
+ ; Scale X = MouseX / 4 + MouseX / 16 + MouseX / 32 (approximates MouseX * 280 / 960)
  LDA TMPXHI
  LSR A
  LSR A
@@ -169,7 +170,15 @@ SETCOR LDY N ; Slot offset
  LSR A
  LSR A
  STA SCDXLO
- ; Add MouseX / 16 (16-bit add)
+ ; Add MouseX / 16
+ LDA TMPXHI
+ LSR A
+ LSR A
+ LSR A
+ LSR A
+ CLC
+ ADC SCDXHI
+ STA SCDXHI
  LDA TMPXLO
  LSR A
  LSR A
@@ -178,27 +187,44 @@ SETCOR LDY N ; Slot offset
  CLC
  ADC SCDXLO
  STA SCDXLO
+ ; Handle carry
+ LDA SCDXHI
+ ADC #0
+ STA SCDXHI
+ ; Add MouseX / 32
  LDA TMPXHI
  LSR A
  LSR A
  LSR A
  LSR A
+ LSR A
+ CLC
  ADC SCDXHI
  STA SCDXHI
- ; Clamp SCDX to 0–279
- LDA SCDXHI
- CMP #$01
- BCC OK_X
- BNE CLAMP_X
- LDA SCDXLO
- CMP #$17
- BCC OK_X
-CLAMP_X
- LDA #$17 ; 279 decimal
+ LDA TMPXLO
+ LSR A
+ LSR A
+ LSR A
+ LSR A
+ LSR A
+ CLC
+ ADC SCDXLO
  STA SCDXLO
+ ; Handle carry
+ LDA SCDXHI
+ ADC #0
+ STA SCDXHI
+ ; Clamp to 0-279 (no branch needed)
+ LDA SCDXHI
+ CMP #$02
+ BCS CLAMP_X
+ JMP NO_CLAMP_X
+CLAMP_X
  LDA #$01
  STA SCDXHI
-OK_X
+ LDA #$17  ; 279 decimal
+ STA SCDXLO
+NO_CLAMP_X
 ; --- Improved Scale Y: MouseY (0–639) to HGR Y (0–191) ---
  LDA TMPYHI
  LSR A
