@@ -54,6 +54,13 @@ SCDXLO = $7404
 SCDXHI = $7405
 SCDYLO = $7406
 SCDYHI = $7407
+TMPA   = $7408
+TMPB   = $7409
+TMP8   = $740A
+TMP9   = $740B
+TMPMUL = $740C
+TMPQ   = $740F
+TMPX   = $740E
 *
 * BLITLIB PARAMETER ADDRESSES
 BLITLIB = $6000
@@ -131,10 +138,12 @@ IN3 LDA #"^"
  JSR TABV
  JSR CROUT
  JMP DOSWARM ;Exit to Applesoft
+************************
 * Draw graphic cursor
-DRWCUR LDA #$07         ; width in pixels
+************************
+DRWCUR LDA #$07  ; width in pixels
  STA $600C
- LDA #$07         ; height in pixels
+ LDA #$07        ; height in pixels
  STA $6006
  LDA SCDXHI      ; dest X high byte (0 or 1)
  STA $600B
@@ -147,17 +156,21 @@ DRWCUR LDA #$07         ; width in pixels
  LDA #$00        ; overwrite mode
  STA $6013
  LDA #$00        ; source X byte offset
- STA $6003
-; Calculate source Y offset as (SCDXHI % 8) * 7
- LDA SCDXLO
- AND #$07      ; SCDXLO % 8
- ASL A         ; *2
- ADC SCDXLO    ; *3 (A = 2A + A = 3A)
- ASL A         ; *6
+ STA $6003       ; store X
+* Calculate source Y offset as (TMPXLO % 8) * 7
+ LDA TMPXLO
+ AND #$7         ; TMPXLO % 8
+ ASL A           ; *2
  CLC
- ADC SCDXLO    ; *7
- STA $6004     ; BLIT
+ ADC TMPXLO      ; *3 (A = 2A + TMPXLO)
+ ASL A           ; *6
+ CLC
+ ADC TMPXLO      ; *7
+ STA $6004       ; store Y
  RTS
+*****************
+* SET COORDS
+*****************
 SETCOR LDY N ; Slot offset
  LDA XL,Y
  STA TMPXLO
@@ -167,103 +180,104 @@ SETCOR LDY N ; Slot offset
  STA TMPYLO
  LDA YH,Y
  STA TMPYHI
-; --- X: MouseX (0–959) to HGR X (0–279) ---
- ; Scale X = MouseX / 4 + MouseX / 16 + MouseX / 32 (approximates MouseX * 280 / 960)
+* --- X: MouseX (0–959) to HGR X (0–279) ---
+* MouseX / 4
  LDA TMPXHI
  LSR A
+ STA TMPA
+ LDA TMPXLO
+ ROR A
+ STA TMPB
+ LDA TMPA
  LSR A
  STA SCDXHI
- LDA TMPXLO
- LSR A
- LSR A
+ LDA TMPB
+ ROR A
  STA SCDXLO
- ; Add MouseX / 16
+* MouseX / 16
  LDA TMPXHI
  LSR A
- LSR A
- LSR A
- LSR A
- CLC
- ADC SCDXHI
- STA SCDXHI
+ STA TMPA
  LDA TMPXLO
+ ROR A
+ STA TMPB
+ LDA TMPA
  LSR A
+ STA TMPA
+ LDA TMPB
+ ROR A
+ STA TMPB
+ LDA TMPA
  LSR A
+ STA TMPA
+ LDA TMPB
+ ROR A
+ STA TMPB
+ LDA TMPA
  LSR A
+ STA TMPA
+ LDA TMPB
+ ROR A
+ STA TMPB
+ LDA TMPA
  LSR A
+ STA TMPA
+ LDA TMPB
+ ROR A
+ STA TMPB
+* Add TMPA:TMPB to SCDXHI:SCDXLO with carry
  CLC
- ADC SCDXLO
+ LDA SCDXLO
+ ADC TMPB
  STA SCDXLO
- ; Handle carry
  LDA SCDXHI
- ADC #0
+ ADC TMPA
  STA SCDXHI
- ; Add MouseX / 32
- LDA TMPXHI
- LSR A
- LSR A
- LSR A
- LSR A
- LSR A
- CLC
- ADC SCDXHI
- STA SCDXHI
- LDA TMPXLO
- LSR A
- LSR A
- LSR A
- LSR A
- LSR A
- CLC
- ADC SCDXLO
- STA SCDXLO
- ; Handle carry
- LDA SCDXHI
- ADC #0
- STA SCDXHI
- ; Clamp to 0-279 (no branch needed)
+* Clamp SCDX to 0–279
  LDA SCDXHI
  CMP #$02
- BCS CLAMP_X
- JMP NO_CLAMP_X
-CLAMP_X
+ BCC OKX
  LDA #$01
  STA SCDXHI
- LDA #$17  ; 279 decimal
+ LDA #$17
  STA SCDXLO
-NO_CLAMP_X
-; --- Improved Scale Y: MouseY (0–639) to HGR Y (0–191) ---
+OKX
+; --- Y: MouseY (0–639) to HGR Y (0–191) ---
  LDA TMPYHI
- LSR A
- LSR A
- STA SCDYHI
+ STA TMPA
  LDA TMPYLO
- LSR A
- LSR A
- STA SCDYLO
- ; Add MouseY / 16 (16-bit add)
- LDA TMPYLO
- LSR A
- LSR A
- LSR A
- LSR A
- CLC
- ADC SCDYLO
- STA SCDYLO
- LDA TMPYHI
- LSR A
- LSR A
- LSR A
- LSR A
- ADC SCDYHI
+ STA TMPB
+ ; Divide TMPA:TMPB by 5, result in SCDYHI:SCDYLO
+ LDA #0
  STA SCDYHI
+ STA SCDYLO
+YDIV5LOOP
+ LDA TMPA
+ CMP #0
+ BNE YDIV5CONT
+ LDA TMPB
+ CMP #5
+ BCC YDIV5DONE
+YDIV5CONT
+ SEC
+ LDA TMPB
+ SBC #5
+ STA TMPB
+ LDA TMPA
+ SBC #0
+ STA TMPA
+ INC SCDYLO
+ BNE YDIV5LOOP
+ INC SCDYHI
+ JMP YDIV5LOOP
+YDIV5DONE
  ; Clamp SCDY to 0–191
  LDA SCDYLO
- CMP #$C0 ; 192
- BCC OK_Y
- LDA #$BF ; 191
+ CMP #$C0
+ BCC OKY
+ LDA #$BF
  STA SCDYLO
-OK_Y
+OKY
  RTS
 *********************************
 *SET CURSOR POS
