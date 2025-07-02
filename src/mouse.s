@@ -78,66 +78,67 @@ B_SRCY  = $6004
 ********************************
 *        INITIALIZE            *
 ********************************
-* JSR TEXT ;SET TEXT MODE
- JSR CHKMOUS ;CHECK FOR MOUSE FIRMWARE
- LDA #$91 ;CTRL-Q
- JSR COUT ;SET 40 COL
+* JSR TEXT      ;SET TEXT MODE
+ JSR CHKMOUS    ;CHECK FOR MOUSE FIRMWARE
+ LDA #$91       ;CTRL-Q
+ JSR COUT       ;SET 40 COL
  LDY #INITMSE
- JSR CALLFRM ;INITIALIZE MOUSE FIRMWARE
- JSR FMTSCR ;FORMAT SCREEN
+ JSR CALLFRM    ;INITIALIZE MOUSE FIRMWARE
+ JSR FMTSCR     ;FORMAT SCREEN
  LDY #SETMSE
- LDA #1 ;SET PASSIVE MODE
- JSR CALLFRM ;START MOUSE
+ LDA #1         ;SET PASSIVE MODE
+ JSR CALLFRM    ;START MOUSE
  LDY #CLMPMSE
- JSR SETCLMP ;SET NEW CLAMPING VALUES
- LDA #0 ; FOR X-COORDINATE
- JSR CALLFRM ;CLAMP-X COORDINATE
+ JSR SETCLMP    ;SET NEW CLAMPING VALUES
+ LDA #0         ; FOR X-COORDINATE
+ JSR CALLFRM    ;CLAMP-X COORDINATE
  LDY #CLMPMSE
- JSR SETCLMP ;SET NEW CLAMPING VALUES
- LDA #1 ; FOR Y-COORDINATE
- JSR CALLFRM ;CLAMP-Y COORDINATE
+ JSR SETCLMP    ;SET NEW CLAMPING VALUES
+ LDA #1         ; FOR Y-COORDINATE
+ JSR CALLFRM    ;CLAMP-Y COORDINATE
  LDY #HOMEMSE
- JSR CALLFRM ;HOME MOUSE POSITION
- BIT STROBE ;RESET KEYBOARD STROBE
+ JSR CALLFRM    ;HOME MOUSE POSITION
+ BIT STROBE     ;RESET KEYBOARD STROBE
 ********************************
 * TRACK THE MOUSE
 ********************************
 * TRACKMOUS
  LDY #READMSE
- JSR CALLFRM ;READ INITIAL POS
- BCC IN2 ;SET INITIAL CURSOR (ALWAYS)
+ JSR CALLFRM     ;READ INITIAL POS
+ BCC IN2         ;SET INITIAL CURSOR (ALWAYS)
 IN1 LDY #READMSE
- JSR CALLFRM ;Read Mouse position
- JSR PRTDATA ;Print data to screen
+ JSR CALLFRM     ;Read Mouse position
+ JSR PRTDATA     ;Print data to screen
+ JSR DRWCUR
  JSR SETCOR
  JSR DRWCUR
  JSR BLITLIB
- LDA BUTTON,Y ;Get Mouse button status
+ LDA BUTTON,Y    ;Get Mouse button status
  LDY CH
- AND #%00100000 ;TEST BIT 5
- BEQ IN3 ;X,Y unchanged
- LDA OLDCHAR ;X,Y changed so
- STA (BASL),Y ; restore screen char
-IN2 JSR SETPOSN ;Set cursor position
+ AND #%00100000  ;TEST BIT 5
+ BEQ IN3         ;X,Y unchanged
+ LDA OLDCHAR     ;X,Y changed so
+ STA (BASL),Y    ; restore screen char
+IN2 JSR SETPOSN  ;Set cursor position
  LDA (BASL),Y
- STA OLDCHAR ;Save screen char
+ STA OLDCHAR     ;Save screen char
 IN3 LDA #"^"
- STA (BASL),Y ;Print cursor
- BIT KBD ;Check keypress
- BPL IN1 ;No keypress, Loop back
+ STA (BASL),Y    ;Print cursor
+ BIT KBD         ;Check keypress
+ BPL IN1         ;No keypress, Loop back
 ********************************
 * QUIT
 ********************************
- BIT STROBE ;Reset keyboard strobe
+ BIT STROBE      ;Reset keyboard strobe
  LDA OLDCHAR
- STA (BASL),Y ;Kill cursorY
+ STA (BASL),Y    ;Kill cursorY
  LDY #SETMSE
  LDA #0
- JSR CALLFRM ;Turn Mouse off
+ JSR CALLFRM     ;Turn Mouse off
  LDA #4
  JSR TABV
  JSR CROUT
- JMP DOSWARM ;Exit to Applesoft
+ JMP DOSWARM     ;Exit to Applesoft
 ************************
 * Draw graphic cursor
 ************************
@@ -151,23 +152,42 @@ DRWCUR LDA #$07  ; width in pixels
  STA $600A
  LDA SCDYLO      ; dest Y (0–191)
  STA $6009
- LDA #$01        ; XOR mode; Bite-level blit mode
+ LDA #$01        ; Bite-level blit mode
  STA $6012
- LDA #$00        ; overwrite mode
+ LDA #$01        ; overwrite mode or XOR mode
  STA $6013
  LDA #$00        ; source X byte offset
  STA $6003       ; store X
-* Calculate source Y offset as (TMPXLO % 8) * 7
+; Calculate source Y offset as (TMPXLO % 28) * 7
  LDA TMPXLO
- AND #$7         ; TMPXLO % 8
+ JSR MOD28
+ STA TMPQ      ; TMPQ = TMPXLO % 8
+ LDA TMPQ
  ASL A           ; *2
  CLC
- ADC TMPXLO      ; *3 (A = 2A + TMPXLO)
+ ADC TMPQ      ; *3 (A = 2A + TMPXLO)
  ASL A           ; *6
  CLC
- ADC TMPXLO      ; *7
- STA $6004       ; store Y
+ ADC TMPQ      ; *7
+ STA $6004     ; store Y
  RTS
+; 8-bit modulo 8: TMPXLO % 8, result in A
+mod8 LDA TMPXLO
+mod8loop CMP #8
+ BCC mod8done
+ SEC
+ SBC #8
+ BCS mod8loop
+mod8done RTS
+; 
+MOD28 LDA TMPXLO
+ LSR A
+MOD28loop CMP #28
+ BCC MOD28done
+ SEC
+ SBC #28
+ BCS MOD28loop
+MOD28done RTS
 *****************
 * SET COORDS
 *****************
@@ -319,10 +339,10 @@ IN7 SBC #24 ;X-units per column
 *   XL/H = lo boundary
 *   YL/H = hi boundary
 *
-SETCLMP LDA #0 ;Min=0
+SETCLMP LDA #0  ;Min=0
  STA XL
  STA XH
- LDA #$BF ;Max=959 ($3BF)
+ LDA #$BF       ;Max=959 ($3BF)
  STA YL
  LDA #3
  STA YH
@@ -331,44 +351,44 @@ SETCLMP LDA #0 ;Min=0
 * PRINT Data Line TO SCReeN
 *********************************
 PRTDATA LDA CV
- PHA ;Save entry row
+ PHA           ;Save entry row
  LDA CH
- PHA ;Save entry column
+ PHA           ;Save entry column
  LDA #22
  JSR TABV
  LDA #5
  STA CH
- LDY N ;Slot offset
- LDA XH,Y ;Hi byte X-coordinate
- LDX XL,Y ;Lo byte X-coordinate
- JSR LINPRT ;Print X-coordinate
+ LDY N         ;Slot offset
+ LDA XH,Y      ;Hi byte X-coordinate
+ LDX XL,Y      ;Lo byte X-coordinate
+ JSR LINPRT    ;Print X-coordinate
  JSR PRBLNK
  LDA #15
  STA CH
- LDY N ;Slot offset
- LDA YH,Y ;Hi byte Y-coordinate
- LDX YL,Y ;Lo bytre Y-coordinate
- JSR LINPRT ;Print Y-coordinate
+ LDY N         ;Slot offset
+ LDA YH,Y      ;Hi byte Y-coordinate
+ LDX YL,Y      ;Lo bytre Y-coordinate
+ JSR LINPRT    ;Print Y-coordinate
  JSR PRBLNK
  LDA #26
  STA CH
- LDY N ;Slot offset
+ LDY N         ;Slot offset
  LDA BUTTON,Y
- LDX #8 ;Bit counter
+ LDX #8        ;Bit counter
 IN8 ASL
  PHA
- BCC IN9 ;Clear bit found
- LDA #"1" ;Set bit found
- HEX 2C ;Skip next 2 bytes
+ BCC IN9       ;Clear bit found
+ LDA #"1"      ;Set bit found
+ HEX 2C        ;Skip next 2 bytes
 IN9 LDA #"0"
- JSR COUT ;Print bit status
+ JSR COUT      ;Print bit status
  PLA
- DEX ;Decrement bit counter
- BPL IN8 ;Get another bit
+ DEX           ;Decrement bit counter
+ BPL IN8       ;Get another bit
  PLA
- STA CH ;Restore entry column
+ STA CH        ;Restore entry column
  PLA
- JMP TABV ;Restore entry row
+ JMP TABV      ;Restore entry row
 *********************************
 * CALL MOUSE FIRMWARE:
 *********************************
@@ -378,11 +398,11 @@ IN9 LDA #"0"
 *    A = USER DEFINED
 *
 CALLFRM PHA
- LDA (PTR),Y ;Set lo byte of Mouse
- STA FIRMADR+1 ; firmware routine
- LDX CN ;Entry X-reg
- LDY N0 ;Entry Y-reg
- PLA ;Entry A-reg
+ LDA (PTR),Y      ;Set lo byte of Mouse
+ STA FIRMADR+1    ; firmware routine
+ LDX CN           ;Entry X-reg
+ LDY N0           ;Entry Y-reg
+ PLA              ;Entry A-reg
 FIRMADR JMP $0000 ;Set by CHKMOUS & CALLFRM
 *********************************
 * FORMAT SCREEN:
@@ -391,16 +411,16 @@ FMTSCR JSR HOME
  LDA #20
  JSR TABV
  LDX #0
-INA LDA TXHDR,X ;Print header
+INA LDA TXHDR,X  ;Print header
  BEQ INB
  JSR COUT
  INX
- BNE INA ;Always
+ BNE INA         ;Always
 INB LDA #22
  JSR TABV
  LDA #3
  STA CH
- LDA #"X" ;Print status line
+ LDA #"X"        ;Print status line
  JSR COUT
  LDA #"="
  JSR COUT
@@ -430,45 +450,45 @@ TXHDR ASC "  *** APPLE MOUSE TRACKING STATION ***"
 *
 * Look for Mouse firmware:
 * 
-CHKMOUS LDX #8 ;Slot counter (+1)
- LDA #0 ;Lo byte of Cn00
+CHKMOUS LDX #8  ;Slot counter (+1)
+ LDA #0         ;Lo byte of Cn00
  STA PTR
- LDA #$C8 ;Hi byte of Cn00 (+1)
+ LDA #$C8       ;Hi byte of Cn00 (+1)
  STA PTR+1
-INC DEC PTR+1 ;Decrement Cn
- DEX ;Decrement slot counter
- BEQ NOMOUSE ;Mouse firmware not found
- LDY #$C ;Offset to Cn0C
- LDA (PTR),Y ;Get byte
- CMP #$20 ;Is it 1st ID byte?
- BNE INC ;No. Check next slot
- LDY #$FB ;Offset to CnFB
- LDA (PTR),Y ;Get byte
- CMP #$D6 ;Is it 2nd byte?
- BNE INC ;No. Check next slot
+INC DEC PTR+1   ;Decrement Cn
+ DEX            ;Decrement slot counter
+ BEQ NOMOUSE    ;Mouse firmware not found
+ LDY #$C        ;Offset to Cn0C
+ LDA (PTR),Y    ;Get byte
+ CMP #$20       ;Is it 1st ID byte?
+ BNE INC        ;No. Check next slot
+ LDY #$FB       ;Offset to CnFB
+ LDA (PTR),Y    ;Get byte
+ CMP #$D6       ;Is it 2nd byte?
+ BNE INC        ;No. Check next slot
 *********************************
 * MOUSE FIRMWARE FOUND:
 *********************************
  LDA PTR+1
- STA FIRMADR+2 ;Set hi byte of slot
- STA CN ;Save Cn for X-reg
- ASL ;Shift n to hi nibble
+ STA FIRMADR+2  ;Set hi byte of slot
+ STA CN         ;Save Cn for X-reg
+ ASL            ;Shift n to hi nibble
  ASL
  ASL
  ASL
- STA N0 ;Save n0 for Y-reg
- STX N ;Sve slot #
+ STA N0         ;Save n0 for Y-reg
+ STX N          ;Sve slot #
  RTS
 *********************************
 * MoUSE FIRMWARE NOT LOCATED:
 *********************************
 NOMOUSE JSR HOME
  LDX #0
-IND LDA TXNOMSE,X ;Print message
+IND LDA TXNOMSE,X  ;Print message
  BEQ TOBASIC
  JSR COUT
  INX
- BNE IND ;Always
+ BNE IND           ;Always
 TOBASIC JMP DOSWARM
 *
 TXNOMSE HEX 878D
@@ -477,7 +497,7 @@ TXNOMSE HEX 878D
 ***********************
 * STORAGE LOCATIONS:
 ***********************
-N DS 1,0 ;Slot #
-CN DS 1,0 ;X-reg setup
-N0 DS 1,0 ;Y-reg setup
+N DS 1,0       ;Slot #
+CN DS 1,0      ;X-reg setup
+N0 DS 1,0      ;Y-reg setup
 OLDCHAR DS 1,0 ;Screen char replaced by cursor
