@@ -55,6 +55,8 @@ HGRYHI = $7407
 TMPA   = $7408
 TMPB   = $7409
 TMPQ   = $740A
+TXTX   = $740B
+TXTY   = $740C
 MODVAL = $7410      ; Modulo value (HGR cell width)
 *****************************
 * BLITLIB PARAMETER ADDRESSES
@@ -93,7 +95,7 @@ B_SRCY  = $6004
     JSR CALLFRM     ;CLAMP-Y COORDINATE
     LDY #HOMEMSE
     JSR CALLFRM     ;HOME MOUSE POSITION
-    LDA #26         ;Initialize modulo value for HGR width
+    LDA #14         ;Initialize modulo value for HGR width
     STA MODVAL
     BIT STROBE      ;RESET KEYBOARD STROBE
 ********************************
@@ -143,13 +145,13 @@ IN3
 * Draw graphic cursor
 ************************
 DRWCUR
-    LDA #$0A        ; width in pixels
+    LDA #$04        ; width in pixels
     STA B_WDTH      ; $600C
     LDA #$07        ; height in pixels
     STA B_HGHT      ; $6006
     LDA HGRXHI      ; dest X high byte (0 or 1)
     STA B_DXLO      ; $600B
-    LDA HGRXLO      ; dest X low byte (0–255)
+    LDA HGRXLO      ; dest X low byte (0-255)
     STA B_DXHI      ; $600A
     LDA HGRYLO      ; dest Y (0–191)
     STA B_DY        ; $6009
@@ -162,7 +164,7 @@ DRWCUR
 ** Calculate source Y offset as (SRCXLO % MODVAL) * 7
     LDA SRCXLO      ; Using the source mouse X
     JSR MODULO      ; apply % MODVAL
-    STA TMPQ        ; TMPQ = SRCXLO % 8
+    STA TMPQ        ; TMPQ = SRCXLO % MODVAL
     LDA TMPQ
     ASL A           ; *2
     CLC
@@ -170,6 +172,7 @@ DRWCUR
     ASL A           ; *6
     CLC
     ADC TMPQ        ; *7
+    ; lda #$00 ;tmp
     STA B_SRCY      ; $6004 store Y
     RTS
 
@@ -187,9 +190,9 @@ MODULOLOOP
 MODULODONE
     RTS
 
-*************
-* SET COORDS
-*************
+*****************
+* SET HGR COORDS
+*****************
 SETCOR
     LDY N         ; Slot offset
     LDA FIRMXL,Y
@@ -319,6 +322,7 @@ IN5
     DEC PTR+2
     BPL IN4
     TYA
+    STA TXTY     ; Save row here
     JSR TABV
 ** Set Cursor column
     LDA FIRMXH,X
@@ -333,17 +337,18 @@ IN7
     BCS IN7
     DEC PTR+2
     BPL IN6
+    STY TXTX     ; Save column here
     STY CH
     RTS
 
-*********************************
-* SET NEW CLAMPING VALUES
-*********************************
+***********************************
+* SET NEW FIRMWARE CLAMPING VALUES
+***********************************
 *   FIRMXL/H = lo boundary
 *   FIRMYL/H = hi boundary
 *
 SETCLMP
-    LDA #0     ;Min=0
+    LDA #0         ;Min=0
     STA FIRMXL
     STA FIRMXH
     LDA #$BF       ;Max=959 ($3BF)
@@ -368,14 +373,14 @@ PRTDATA
     LDA FIRMXH,Y  ;Hi byte X-coordinate
     LDX FIRMXL,Y  ;Lo byte X-coordinate
     JSR LINPRT    ;Print X-coordinate
-    JSR PRBLNK
+    JSR PRBLNK    ;Print 3 spaces
     LDA #15
     STA CH
     LDY N         ;Slot offset
     LDA FIRMYH,Y  ;Hi byte Y-coordinate
     LDX FIRMYL,Y  ;Lo bytre Y-coordinate
     JSR LINPRT    ;Print Y-coordinate
-    JSR PRBLNK
+    JSR PRBLNK    ;Print 3 spaces
     LDA #26
     STA CH
     LDY N         ;Slot offset
