@@ -17,7 +17,7 @@ BASL = $28       ;LEFT CHAR OF CURRENT ROW
 DOSWARM = $3D0   ;WRM-START (PRO)DOS
 KBD = $C000      ;KEYBOARD INPUT
 STROBE = $C010   ;KEYBOARD STROBE
-LINPRT = $ED24   ;PRINTDECIMAL OF A,X
+LINPRT = $ED24   ;PRINT DECIMAL OF A,X
 PRBLNK = $F948   ;PRINT 3 BLANKS
 TEXT = $FB39     ;SETNORMAL TEXT WINDOW
 TABV = $FB5B     ;SETROW IN A-REG
@@ -27,10 +27,10 @@ COUT = $FDED     ;OUTPUT CHAR
 ********************************
 * SCREENHOLE EQUATES:
 ********************************
-FIRMXL = $478
-FIRMYL = $4F8
-FIRMXH = $578
-FIRMYH = $5F8
+FIRMAL = $478
+FIRMBL = $4F8
+FIRMAH = $578
+FIRMBH = $5F8
 FIRMBTN = $778
 ********************************
 * OFFSETS TO MOUSE ENTRY POINTS:
@@ -44,28 +44,34 @@ INITMSE = $19
 **********************************************
 * TEMPORARY STORAGE FOR BLIT CURSOR AND STATE:
 **********************************************
-SRCXLO = $7400
-SRCXHI = $7401
-SRCYLO = $7402
-SRCYHI = $7403
-HGRXLO = $7404
-HGRXHI = $7405
-HGRYLO = $7406
-HGRYHI = $7407
-TMPA   = $7408
-TMPB   = $7409
-TMPQ   = $740A
-TXTX   = $740B
-TXTY   = $740C
-MODVAL = $7410      ; Modulo value (HGR cell width)
+SRCXLO = $7400   ;Firmware provided mouse X low byte (0-959; 0-255)
+SRCXHI = $7401   ;Firmware provided mouse X high byte (0-959; 0-4)
+SRCYLO = $7402   ;Firmware provided mouse Y low byte (0-959; 0-255)
+SRCYHI = $7403   ;Firmware provided mouse Y high byte (0-959; 0-4)
+HGRXLO = $7404   ;Graphic Cursor X position low byte (0-279; 0-255 step:7)
+HGRXHI = $7405   ;Graphic Cursor X position high byte (0-279; 0-1)
+HGRY   = $7406   ;Graphic Cursor Y position (0-192)
+TMPA   = $7407
+TMPB   = $7408
+TMPX   = $7409
+TMPY   = $740A
+TXTX   = $740B   ;Text cursor X position (0-40)
+TXTY   = $740C   ;Text cursor Y position (0-24)
+SLOT   = $740D   ; Slot number the Mouse firmware resides
+COL80  = $740F   ; Use 80 COL and Double Hi-Res
+MODVAL = $7410   ; Modulo value (HGR cell width)
+MULTPCD = $7411
+PRODUCTLO = $7412
+PRODUCTHI = $7413
+MULTPLR = $7414
 *****************************
 * BLITLIB PARAMETER ADDRESSES
 *****************************
 BLITLIB = $6000
 B_WDTH  = $600C
 B_HGHT  = $6006
-B_DXLO  = $600B
-B_DXHI  = $600A
+B_DXHI  = $600B
+B_DXLO  = $600A
 B_DY    = $6009
 B_MODE  = $6012
 B_OVRWR = $6013
@@ -76,9 +82,14 @@ B_SRCY  = $6004
 ********************************
 *        INITIALIZE            *
 ********************************
-    JSR CHKMOUS     ;CHECK FOR MOUSE FIRMWARE
-    LDA #$91        ;CTRL-Q
-    JSR COUT        ;SET 40 COL
+    ; Check if we're already in 80-column mode
+    LDA $C01F       ; Read 80-column status
+    STA COL80       ; Switch 80 Col ON(1) or OFF(0)
+    BMI SKIP40COL   ; If bit 7 is set, we're in 80-col mode
+    LDA #$91        ; CTRL-Q to exit into
+    JSR COUT        ; 40 COL
+SKIP40COL
+    JSR CHKMOUS     ; CHECK FOR MOUSE FIRMWARE
     LDY #INITMSE
     JSR CALLFRM     ;INITIALIZE MOUSE FIRMWARE
     JSR FMTSCR      ;FORMAT SCREEN
@@ -86,11 +97,11 @@ B_SRCY  = $6004
     LDA #1          ;SET PASSIVE MODE
     JSR CALLFRM     ;START MOUSE
     LDY #CLMPMSE
-    JSR SETCLMP     ;SET NEW CLAMPING VALUES
+    JSR SETCLAMPX   ;SET NEW CLAMPING VALUES
     LDA #0          ; FOR X-COORDINATE
     JSR CALLFRM     ;CLAMP-X COORDINATE
     LDY #CLMPMSE
-    JSR SETCLMP     ;SET NEW CLAMPING VALUES
+    JSR SETCLAMPY   ;SET NEW CLAMPING VALUES
     LDA #1          ; FOR Y-COORDINATE
     JSR CALLFRM     ;CLAMP-Y COORDINATE
     LDY #HOMEMSE
@@ -114,14 +125,19 @@ IN1
     BEQ IN3         ;X,Y unchanged
     LDA OLDCHAR     ;X,Y changed so
     STA (BASL),Y    ; restore screen char over text cursor
-    JSR SETCOR      ;Calculate cursor position
-    JSR DRWCUR      ;Set BLITLIB cursor position
 IN2
-    JSR SETPOSN     ;Set text cursor position
+    JSR SETPOSN     ;Set cursor positions
+    JSR DRWCUR      ;Set BLITLIB cursor position
     LDA (BASL),Y
     STA OLDCHAR     ;Save screen char under text cursor
 IN3
-    LDA #"^"
+    LDA COL80       ; Check if we're in 80-column mode
+    BEQ USE40COL    ; If COL80 = 0, use 40-col cursor
+    LDA #66         ; 80-column mode arrow symbol
+    JMP CURSORDONE
+USE40COL
+    LDA #"^"        ; 40-column mode arrow-like
+CURSORDONE
     STA (BASL),Y    ;Print text cursor
     JSR BLITLIB     ;Draw Cursor
     BIT KBD         ;Check keypress
@@ -141,44 +157,58 @@ IN3
     JSR CROUT
     JMP DOSWARM     ;Exit to Applesoft
 
-************************
-* Draw graphic cursor
-************************
+***********************************
+* Draw graphic cursor with BLITLIB
+***********************************
 DRWCUR
     LDA #$04        ; width in pixels
     STA B_WDTH      ; $600C
     LDA #$07        ; height in pixels
     STA B_HGHT      ; $6006
-    LDA HGRXHI      ; dest X high byte (0 or 1)
-    STA B_DXLO      ; $600B
-    LDA HGRXLO      ; dest X low byte (0-255)
-    STA B_DXHI      ; $600A
-    LDA HGRYLO      ; dest Y (0–191)
+    
+    LDA TXTX        ; Load text X position (0-40)
+    JSR MULBY7      ; Multiply by 7 to get byte-level blit position
+    STA B_DXLO      ; dest X - Low byte (0-255)
+    LDA #0
+    BCC NOOVERFLOW  ; If no carry, high byte is 0
+    LDA #1          ; If carry, high byte is 1
+NOOVERFLOW
+    STA B_DXHI      ; dest X - High byte (0-1)
+    
+    LDA SRCYLO      ; dest Y (0–191)
     STA B_DY        ; $6009
+
+** Calculate source spritesheet Y byte offset from mouse SRC X (0-560)
+** With 40 positions for X we have to fill the 7 HGR (14 DHGR) pixels gap with frames from the spritesheet
+    LDA SRCXLO
+    JSR MODULO      ; reduced to % MODVAL
+    JSR MULBY7      ; multiplied by 7
+    STA B_SRCY      ; $6004 store Y
+    
     LDA #$01        ; Bite-level blit mode
     STA B_MODE      ; $6012
     LDA #$00        ; overwrite mode or XOR mode
     STA B_OVRWR     ; $6013
     LDA #$00        ; source X byte offset
     STA B_SRCX      ; $6003 store X
-** Calculate source Y offset as (SRCXLO % MODVAL) * 7
-    LDA SRCXLO      ; Using the source mouse X
-    JSR MODULO      ; apply % MODVAL
-    STA TMPQ        ; TMPQ = SRCXLO % MODVAL
-    LDA TMPQ
-    ASL A           ; *2
-    CLC
-    ADC TMPQ        ; *3 (A = 2A + SRCXLO)
-    ASL A           ; *6
-    CLC
-    ADC TMPQ        ; *7
-    ; lda #$00 ;tmp
-    STA B_SRCY      ; $6004 store Y
     RTS
 
-*********
-* MODULO
-*********
+****************
+* MULTIPLY BY 7
+****************
+MULBY7
+    STA TMPA
+    ASL A           ; *2
+    CLC
+    ADC TMPA        ; *3 (A = 2A + SRCXLO)
+    ASL A           ; *6
+    CLC
+    ADC TMPA        ; *7
+    RTS
+
+***********
+* MODULO %
+***********
 MODULO
     LSR A
 MODULOLOOP
@@ -190,171 +220,74 @@ MODULOLOOP
 MODULODONE
     RTS
 
-*****************
-* SET HGR COORDS
-*****************
-SETCOR
-    LDY N         ; Slot offset
-    LDA FIRMXL,Y
-    STA SRCXLO
-    LDA FIRMXH,Y
-    STA SRCXHI
-    LDA FIRMYL,Y
-    STA SRCYLO
-    LDA FIRMYH,Y
-    STA SRCYHI
-** X: MouseX (0–959) to HGR X (0–279) ---
-** MouseX / 4
-    LDA SRCXHI
-    LSR A
-    STA TMPA
-    LDA SRCXLO
-    ROR A
-    STA TMPB
-    LDA TMPA
-    LSR A
-    STA HGRXHI
-    LDA TMPB
-    ROR A
-    STA HGRXLO
-** MouseX / 16
-    LDA SRCXHI
-    LSR A
-    STA TMPA
-    LDA SRCXLO
-    ROR A
-    STA TMPB
-    LDA TMPA
-    LSR A
-    STA TMPA
-    LDA TMPB
-    ROR A
-    STA TMPB
-    LDA TMPA
-    LSR A
-    STA TMPA
-    LDA TMPB
-    ROR A
-    STA TMPB
-    LDA TMPA
-    LSR A
-    STA TMPA
-    LDA TMPB
-    ROR A
-    STA TMPB
-    LDA TMPA
-    LSR A
-    STA TMPA
-    LDA TMPB
-    ROR A
-    STA TMPB
-** Add TMPA:TMPB to HGRXHI:HGRXLO with carry
-    CLC
-    LDA HGRXLO
-    ADC TMPB
-    STA HGRXLO
-    LDA HGRXHI
-    ADC TMPA
-    STA HGRXHI
-** Clamp SCDX to 0–279
-    LDA HGRXHI
-    CMP #$02
-    BCC OKX
-    LDA #$01
-    STA HGRXHI
-    LDA #$17
-    STA HGRXLO
-OKX
-** Y: MouseY (0–959) to HGR Y (0–191) ---
-    LDA SRCYHI
-    STA TMPA
-    LDA SRCYLO
-    STA TMPB
-** Divide TMPA:TMPB by 5, result in HGRYHI:HGRYLO
-    LDA #0
-    STA HGRYHI
-    STA HGRYLO
-YDIV5LOOP
-    LDA TMPA
-    CMP #0
-    BNE YDIV5CONT
-    LDA TMPB
-    CMP #5
-    BCC YDIV5DONE
-YDIV5CONT
-    SEC
-    LDA TMPB
-    SBC #5
-    STA TMPB
-    LDA TMPA
-    SBC #0
-    STA TMPA
-    INC HGRYLO
-    BNE YDIV5LOOP
-    INC HGRYHI
-    JMP YDIV5LOOP
-** Clamp SCDY to 0–191
-YDIV5DONE
-    LDA HGRYLO
-    CMP #$C0
-    BCC OKY
-    LDA #$BF
-    STA HGRYLO
-OKY
-    RTS
-
-***************************
-* SET TEXT CURSOR POSITION
-***************************
-** Set Cursor row
+************************************
+* SET CURSOR POSITIONS TEXT and HGR
+************************************
+** Get mouse position values from Firmware
 SETPOSN
     LDX N
-    LDA FIRMYH,X
+    LDA FIRMBH,X
     STA PTR+2
+    STA SRCYHI
     LDY #-1
-    LDA FIRMYL,X
+    LDA FIRMBL,X
+    STA SRCYLO
+
 IN4
     SEC
 IN5
-    SBC #40      ;Y-units per row
+    SBC #8      ; Y-units per row
     INY
     BCS IN5
     DEC PTR+2
     BPL IN4
     TYA
-    STA TXTY     ; Save row here
+    STA TXTY     ; Save text cursor position Y (row)
     JSR TABV
-** Set Cursor column
-    LDA FIRMXH,X
+
+    LDA FIRMAH,X
     STA PTR+2
+    STA SRCXHI
     LDY #-1
-    LDA FIRMXL,X
+    LDA FIRMAL,X
+    ;LSR A
+    STA SRCXLO
+
 IN6
     SEC
 IN7
-    SBC #24      ;X-units per column
+    SBC #28     ; X-units per column
     INY
     BCS IN7
     DEC PTR+2
     BPL IN6
-    STY TXTX     ; Save column here
-    STY CH
+    TYA
+    STA TXTX     ; Save text cursor position X (column)
+    STA CH
+
     RTS
 
 ***********************************
 * SET NEW FIRMWARE CLAMPING VALUES
 ***********************************
-*   FIRMXL/H = lo boundary
-*   FIRMYL/H = hi boundary
-*
-SETCLMP
-    LDA #0         ;Min=0
-    STA FIRMXL
-    STA FIRMXH
-    LDA #$BF       ;Max=959 ($3BF)
-    STA FIRMYL
-    LDA #3
-    STA FIRMYH
+SETCLAMPX
+    LDA #0       
+    STA FIRMAL
+    STA FIRMAH
+    LDA #$60        ;#193       ;Max=1120 ($230)
+    STA FIRMBL
+    LDA #4         ;#4
+    STA FIRMBH
+    RTS
+
+SETCLAMPY
+    LDA #0
+    STA FIRMAL
+    STA FIRMAH
+    LDA #$C0       ;Max=192
+    STA FIRMBL
+    LDA #0
+    STA FIRMBH
     RTS
 
 *********************************
@@ -367,23 +300,37 @@ PRTDATA
     PHA           ;Save entry column
     LDA #22
     JSR TABV
-    LDA #5
+    LDA #3
     STA CH
     LDY N         ;Slot offset
-    LDA FIRMXH,Y  ;Hi byte X-coordinate
-    LDX FIRMXL,Y  ;Lo byte X-coordinate
-    JSR LINPRT    ;Print X-coordinate
+    LDA SRCXHI    ;Hi byte X-coordinate
+    LDX SRCXLO    ;Lo byte X-coordinate
+    JSR LINPRT    ;Print hgr cursor X-coordinate
     JSR PRBLNK    ;Print 3 spaces
-    LDA #15
+    LDA #10
     STA CH
-    LDY N         ;Slot offset
-    LDA FIRMYH,Y  ;Hi byte Y-coordinate
-    LDX FIRMYL,Y  ;Lo bytre Y-coordinate
-    JSR LINPRT    ;Print Y-coordinate
-    JSR PRBLNK    ;Print 3 spaces
-    LDA #26
+    LDY N
+    LDA #0
+    LDX TXTX      ;Text cursor X-coordinate
+    JSR LINPRT
+    JSR PRBLNK
+    LDA #17
     STA CH
-    LDY N         ;Slot offset
+    LDY N
+    LDA SRCYHI    ;Hi byte Y-coordinate
+    LDX SRCYLO    ;Lo bytre Y-coordinate
+    JSR LINPRT    ;Print hgr cursor Y-coordinate
+    JSR PRBLNK
+    LDA #22
+    STA CH
+    LDY N
+    LDA #0
+    LDX TXTY      ;Text cursor Y-coordinate
+    JSR LINPRT
+    JSR PRBLNK
+    LDA #30
+    STA CH
+    LDY N
     LDA FIRMBTN,Y
     LDX #8        ;Bit counter
 IN8
@@ -437,19 +384,19 @@ INA
 INB
     LDA #22
     JSR TABV
-    LDA #3
+    LDA #1
     STA CH
     LDA #"X"        ;Print status line
     JSR COUT
     LDA #"="
     JSR COUT
-    LDA #13
+    LDA #15
     STA CH
     LDA #"Y"
     JSR COUT
     LDA #"="
     JSR COUT
-    LDA #23
+    LDA #27
     STA CH
     LDA #"B"
     JSR COUT
@@ -500,7 +447,8 @@ INC
     ASL
     ASL
     STA N0         ;Save n0 for Y-reg
-    STX N          ;Sve slot #
+    STX N          ;Save slot #
+    STX SLOT
     RTS
 
 *********************************
