@@ -1,36 +1,50 @@
-********************************
-* MOUSE TRACK & HGR CURSOR     *
-* RECOLLECTED BY NONCHO SAVOV  *
-* AT FOUMARTGAMES.COM 2024-25  *
-********************************
-* ORIGINAL TEXT BASED TRACKER  *
-* WRITTEN BY SANDY MOSSBERG    *
-* (C) 1985 BY MICROSPARC. INC  *
-********************************
-** For MERLIN Compiler
-** Source: https://www.applefritter.com/appleii-box/APPLE2/AppleMouseII/AppleMouseII.pdf
+*******************************
+* Mouse TEXT/HGR/DHGR Cursor  *
+* Developed by NONCHO SAVOV   *
+* (C) 2025 FoumartGames.com   *
+*******************************
+* Github: https://github.com/foumart/AppleII.Project.template
+
+*******************************
+* Credits: Text based Tracker *
+* Written by SANDY MOSSBERG   *
+* (C) 1985 Microsparc. inc    *
+*******************************
+* Source: https://www.applefritter.com/appleii-box/APPLE2/AppleMouseII/AppleMouseII.pdf
+
+*******************************
+* Credits: BLITTERANG by      *
+* CROW COUSINS Micro Software *
+*******************************
+* Retro Apple II Software: https://crowcousins.com/retro-apple-ii-software/
+
+*
+* For MERLIN Compiler
+* CALL 26368 from BASIC to run
+* 
 
 **********************
 * Zero Page locations
 **********************
-PTR = $06        ; POINTER, temp storage
-CH = $24         ; COLUMN - Horizontal Cursor Position (0 - 39/79)
-CV = $25         ; ROW - Vertical Cursor Position (0 - 23)
-BASL = $28       ; Left Char of current Row - Base Address of Text Cursor's Position
+PTR = $06           ; POINTER, temp storage
+CH = $24            ; COLUMN - Horizontal Cursor Position (0 - 39/79)
+CV = $25            ; ROW - Vertical Cursor Position (0 - 23)
+BASL = $28          ; Left Char of current Row - Base Address of Text Cursor's Position
 
 ********************************
 * RAM/ROM Soft switch locations
 ********************************
-DOSWARM = $3D0   ; WRM-START (PRO)DOS
-KBD = $C000      ; KEYBOARD INPUT
-STROBE = $C010   ; KEYBOARD STROBE
-LINPRT = $ED24   ; PRINT DECIMAL OF A,X
-PRBLNK = $F948   ; PRINT 3 BLANKS
-TEXT = $FB39     ; SETNORMAL TEXT WINDOW
-TABV = $FB5B     ; SETROW IN A-REG
-HOME = $FC58     ; HOME, CLEAR SCREEN
-CROUT = $FD8E    ; OUTPUT CR
-COUT = $FDED     ; OUTPUT CHAR
+DOSWARM = $3D0      ; WRM-START (PRO)DOS
+KBD = $C000         ; KEYBOARD INPUT
+STROBE = $C010      ; KEYBOARD STROBE
+LINPRT = $ED24      ; PRINT DECIMAL OF A,X
+PRBLNK = $F948      ; PRINT 3 BLANKS
+TEXT = $FB39        ; SETNORMAL TEXT WINDOW
+TABV = $FB5B        ; SETROW IN A-REG
+HOME = $FC58        ; HOME, CLEAR SCREEN
+CROUT = $FD8E       ; OUTPUT CR
+COUT = $FDED        ; OUTPUT CHAR
+
 *********************
 * SCREENHOLE EQUATES
 *********************
@@ -39,6 +53,7 @@ FIRMBL = $4F8
 FIRMAH = $578
 FIRMBH = $5F8
 FIRMBTN = $778
+
 ********************************
 * OFFSETS TO MOUSE ENTRY POINTS
 ********************************
@@ -62,12 +77,12 @@ B_OVRWR = $6013
 B_SRCX  = $6003
 B_SRCY  = $6004
 
-    ORG $6700
-*************
-* INITIALIZE
-*************
-** Check if we're already in 80-column mode
-** and exit to 40 column mode if needed
+    ORG $6700       ; Not using BLITSHIFT, but if needed change the start address to $7400.
+
+*********************************************************
+* INITIALIZE - CALL 26368 ($6700), or CALL 29696 ($7400)
+*********************************************************
+** Check if we're already in 80-column mode and exit to 40 column mode or vice-versa
     LDA $C01F       ; Read 80-column status
     STA COL80       ; Switch 80 Col ON(1) or OFF(0)
     BMI SKIP40COL   ; If bit 7 is set, we're in 80-col mode
@@ -281,13 +296,13 @@ GETPOS
 IN4
     SEC
 IN5
-    SBC #8      ; Y-units per row
+    SBC #8          ; Y-units per row
     INY
     BCS IN5
     DEC PTR+2
     BPL IN4
     TYA
-    STA TXTY    ; Save text cursor position Y (row)
+    STA TXTY        ; Save text cursor position Y (row)
     JSR TABV
 
     LDA FIRMAH,X
@@ -300,13 +315,13 @@ IN5
 IN6
     SEC
 IN7
-    SBC #28     ; X-units per column
+    SBC #28         ; X-units per column
     INY
     BCS IN7
     DEC PTR+2
     BPL IN6
     TYA
-    STA TXTX    ; Save text cursor position X (column)
+    STA TXTX        ; Save text cursor position X (column)
     STA CH
 
     RTS
@@ -317,10 +332,10 @@ IN7
 SETCLAMPX
     LDA #0
     STA FIRMAL
-    STA FIRMAH  ; Max = 1120
-    LDA #$60    ; #96 (1120 - 1024)
+    STA FIRMAH      ; Max = 1120
+    LDA #$60        ; #96 (1120 - 1024)
     STA FIRMBL
-    LDA #4      ; #4 (*256)
+    LDA #4          ; #4 (*256)
     STA FIRMBH
     RTS
 
@@ -328,7 +343,7 @@ SETCLAMPY
     LDA #0
     STA FIRMAL
     STA FIRMAH
-    LDA #$C0    ; Max = 192
+    LDA #$C0        ; Max = 192
     STA FIRMBL
     LDA #0
     STA FIRMBH
@@ -339,60 +354,60 @@ SETCLAMPY
 ****************************
 PRTDATA
     LDA CV
-    PHA           ; Save entry row
+    PHA             ; Save entry row
     LDA CH
-    PHA           ; Save entry column
+    PHA             ; Save entry column
     LDA #22
     JSR TABV
     LDA #3
     STA CH
-    LDY N         ; Slot offset
-    LDA SRCXHI    ; Hi byte X-coordinate
-    LDX SRCXLO    ; Lo byte X-coordinate
-    JSR LINPRT    ; Print HGR cursor X-coordinate
-    JSR PRBLNK    ; Print 3 spaces
+    LDY N           ; Slot offset
+    LDA SRCXHI      ; Hi byte X-coordinate
+    LDX SRCXLO      ; Lo byte X-coordinate
+    JSR LINPRT      ; Print HGR cursor X-coordinate
+    JSR PRBLNK      ; Print 3 spaces
     LDA #10
     STA CH
     LDY N
     LDA #0
-    LDX TXTX      ; Text cursor X-coordinate
+    LDX TXTX        ; Text cursor X-coordinate
     JSR LINPRT
     JSR PRBLNK
     LDA #17
     STA CH
     LDY N
-    LDA SRCYHI    ; Hi byte Y-coordinate
-    LDX SRCYLO    ; Lo bytre Y-coordinate
-    JSR LINPRT    ; Print HGR cursor Y-coordinate
+    LDA SRCYHI      ; Hi byte Y-coordinate
+    LDX SRCYLO      ; Lo bytre Y-coordinate
+    JSR LINPRT      ; Print HGR cursor Y-coordinate
     JSR PRBLNK
     LDA #22
     STA CH
     LDY N
     LDA #0
-    LDX TXTY      ; Text cursor Y-coordinate
+    LDX TXTY        ; Text cursor Y-coordinate
     JSR LINPRT
     JSR PRBLNK
     LDA #30
     STA CH
     LDY N
     LDA FIRMBTN,Y
-    LDX #8        ; Bit counter
+    LDX #8          ; Bit counter
 IN8
     ASL
     PHA
-    BCC IN9       ; Clear bit found
-    LDA #"1"      ; Set bit found
-    HEX 2C        ; Skip next 2 bytes
+    BCC IN9         ; Clear bit found
+    LDA #"1"        ; Set bit found
+    HEX 2C          ; Skip next 2 bytes
 IN9
     LDA #"0"
-    JSR COUT      ; Print bit status
+    JSR COUT        ; Print bit status
     PLA
-    DEX           ; Decrement bit counter
-    BPL IN8       ; Get another bit
+    DEX             ; Decrement bit counter
+    BPL IN8         ; Get another bit
     PLA
-    STA CH        ; Restore entry column
+    STA CH          ; Restore entry column
     PLA
-    JMP TABV      ; Restore entry row
+    JMP TABV        ; Restore entry row
 
 **********************
 * CALL MOUSE FIRMWARE
@@ -517,21 +532,22 @@ TXNOMSE
 ********************
 * Storage Locations
 ********************
-N DS 1,0       ; Slot #
-CN DS 1,0      ; X-reg setup
-N0 DS 1,0      ; Y-reg setup
-OLDCHAR DS 1,0 ; Screen char replaced by cursor
+N DS 1,0            ; Slot #
+CN DS 1,0           ; X-reg setup
+N0 DS 1,0           ; Y-reg setup
+OLDCHAR DS 1,0      ; Screen char replaced by cursor
 
 *****************************
 * Storage for BLITLIB Cursor
 *****************************
-SRCXLO DS 1,0  ; Firmware provided mouse X low byte (0-959; 0-255)
-SRCXHI DS 1,0  ; Firmware provided mouse X high byte (0-959; 0-4)
-SRCYLO DS 1,0  ; Firmware provided mouse Y low byte (0-959; 0-255)
-SRCYHI DS 1,0  ; Firmware provided mouse Y high byte (0-959; 0-4)
-TMPA   DS 1,0  ; Helper temporary variable
-TXTX   DS 1,0  ; Text cursor X position (0-40)
-TXTY   DS 1,0  ; Text cursor Y position (0-24)
-SLOT   DS 1,0  ; Slot number where the Mouse firmware resides
-COL80  DS 1,0  ; Use 80 COL and Double Hi-Res
-MODVAL DS 1,0  ; Modulo value (HGR cell width)
+SRCXLO DS 1,0       ; Firmware provided mouse X low byte (0-959; 0-255)
+SRCXHI DS 1,0       ; Firmware provided mouse X high byte (0-959; 0-4)
+SRCYLO DS 1,0       ; Firmware provided mouse Y low byte (0-959; 0-255)
+SRCYHI DS 1,0       ; Firmware provided mouse Y high byte (0-959; 0-4)
+TMPA   DS 1,0       ; Helper temporary variable
+TXTX   DS 1,0       ; Text cursor X position (0-40)
+TXTY   DS 1,0       ; Text cursor Y position (0-24)
+SLOT   DS 1,0       ; Slot number where the Mouse firmware resides
+COL80  DS 1,0       ; Use 80 COL and Double Hi-Res
+TEXTON DS 1,0       ; Text only
+MODVAL DS 1,0       ; Modulo value (HGR cell width)
