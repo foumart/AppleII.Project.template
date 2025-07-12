@@ -125,11 +125,14 @@ IN1
     BEQ IN3         ;X,Y unchanged
     LDA OLDCHAR     ;X,Y changed so
     STA (BASL),Y    ; restore screen char over text cursor
+    JSR BLITLIB
 IN2
-    JSR SETPOSN     ;Set cursor positions
-    JSR DRWCUR      ;Set BLITLIB cursor position
-    LDA (BASL),Y
-    STA OLDCHAR     ;Save screen char under text cursor
+    JSR GETPOS      ; Set cursor positions
+    JSR SETCURSOR   ; Set BLITLIB cursor position
+    JSR BLITLIB     ; Draw cursor arrow on HGR screen
+    JSR GETPOS      ; Set cursor positions (again, TODO: check how to avoid)
+    LDA (BASL),Y    ; Get screen char symbol under text cursor
+    STA OLDCHAR     ;  and save it
 IN3
     LDA COL80       ; Check if we're in 80-column mode
     BEQ USE40COL    ; If COL80 = 0, use 40-col cursor
@@ -139,7 +142,6 @@ USE40COL
     LDA #"^"        ; 40-column mode arrow-like
 CURSORDONE
     STA (BASL),Y    ;Print text cursor
-    JSR BLITLIB     ;Draw Cursor
     BIT KBD         ;Check keypress
     BPL IN1         ;No keypress, Loop back
 ********************************
@@ -160,7 +162,7 @@ CURSORDONE
 ***********************************
 * Draw graphic cursor with BLITLIB
 ***********************************
-DRWCUR
+SETCURSOR
     LDA #$04        ; width in pixels
     STA B_WDTH      ; $600C
     LDA #$07        ; height in pixels
@@ -178,16 +180,47 @@ NOOVERFLOW
     LDA SRCYLO      ; dest Y (0–191)
     STA B_DY        ; $6009
 
-** Calculate source spritesheet Y byte offset from mouse SRC X (0-560)
+** Calculate source spritesheet Y byte offset from mouse SRC X (0-1119)
 ** With 40 positions for X we have to fill the 7 HGR (14 DHGR) pixels gap with frames from the spritesheet
+    LDA SRCXHI
+    CMP #1
+    BEQ SCREEN1
+    CMP #2
+    BEQ SCREEN2
+    CMP #3
+    BEQ SCREEN3
+    CMP #4
+    BEQ SCREEN4
     LDA SRCXLO
+    JMP SCREENDONE
+SCREEN1
+    LDA SRCXLO
+    CLC
+    ADC #32
+    JMP SCREENDONE
+SCREEN2
+    LDA SRCXLO
+    CLC
+    ADC #36
+    JMP SCREENDONE
+SCREEN3
+    LDA SRCXLO
+    CLC
+    ADC #12
+    JMP SCREENDONE
+SCREEN4
+    LDA SRCXLO
+    CLC
+    ADC #16
+    JMP SCREENDONE
+SCREENDONE
     JSR MODULO      ; reduced to % MODVAL
     JSR MULBY7      ; multiplied by 7
     STA B_SRCY      ; $6004 store Y
     
     LDA #$01        ; Bite-level blit mode
     STA B_MODE      ; $6012
-    LDA #$00        ; overwrite mode or XOR mode
+    LDA #$01        ; overwrite mode or XOR mode
     STA B_OVRWR     ; $6013
     LDA #$00        ; source X byte offset
     STA B_SRCX      ; $6003 store X
@@ -224,7 +257,7 @@ MODULODONE
 * SET CURSOR POSITIONS TEXT and HGR
 ************************************
 ** Get mouse position values from Firmware
-SETPOSN
+GETPOS
     LDX N
     LDA FIRMBH,X
     STA PTR+2
@@ -250,7 +283,6 @@ IN5
     STA SRCXHI
     LDY #-1
     LDA FIRMAL,X
-    ;LSR A
     STA SRCXLO
 
 IN6
