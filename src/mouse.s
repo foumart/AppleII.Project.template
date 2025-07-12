@@ -163,6 +163,10 @@ CURSORDONE
 * Draw graphic cursor with BLITLIB
 ***********************************
 SETCURSOR
+    LDA #$01        ; Bite-level blit mode
+    STA B_MODE      ; $6012
+    LDA #$01        ; overwrite mode or XOR mode
+    STA B_OVRWR     ; $6013
     LDA #$04        ; width in pixels
     STA B_WDTH      ; $600C
     LDA #$07        ; height in pixels
@@ -182,6 +186,7 @@ NOOVERFLOW
 
 ** Calculate source spritesheet Y byte offset from mouse SRC X (0-1119)
 ** With 40 positions for X we have to fill the 7 HGR (14 DHGR) pixels gap with frames from the spritesheet
+** There are a couple of micro-management regarding precise cursor position. TODO: to be improved
     LDA SRCXHI
     CMP #1
     BEQ SCREEN1
@@ -195,11 +200,23 @@ NOOVERFLOW
     JMP SCREENDONE
 SCREEN1
     LDA SRCXLO
+    CMP #240
+    BCC SCREEN1_LOW
+    CLC
+    ADC #36
+    JMP SCREENDONE
+SCREEN1_LOW
     CLC
     ADC #32
     JMP SCREENDONE
 SCREEN2
     LDA SRCXLO
+    CMP #240
+    BCC SCREEN2_LOW
+    CLC
+    ADC #40
+    JMP SCREENDONE
+SCREEN2_LOW
     CLC
     ADC #36
     JMP SCREENDONE
@@ -217,13 +234,22 @@ SCREENDONE
     JSR MODULO      ; reduced to % MODVAL
     JSR MULBY7      ; multiplied by 7
     STA B_SRCY      ; $6004 store Y
-    
-    LDA #$01        ; Bite-level blit mode
-    STA B_MODE      ; $6012
-    LDA #$01        ; overwrite mode or XOR mode
-    STA B_OVRWR     ; $6013
-    LDA #$00        ; source X byte offset
-    STA B_SRCX      ; $6003 store X
+
+** Check if we are near the right edge of the screen so we can avoid wrapping the cursor graphic
+    LDA SRCXHI
+    CMP #4
+    BNE SKIPXOFFSET
+    LDA SRCXLO
+    CMP #78
+    BCC SKIPXOFFSET
+    LDA #$00
+    CLC
+    ADC #2         ; Add offset to accumulator
+    JMP STOREXOFFSET
+SKIPXOFFSET
+    LDA #$00
+STOREXOFFSET
+    STA B_SRCX      ; $6003 store X byte offset
     RTS
 
 ****************
