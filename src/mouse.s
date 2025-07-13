@@ -16,12 +16,12 @@
 * Credits: BLITTERANG by      *
 * CROW COUSINS Micro Software *
 *******************************
-* Retro Apple II Software: https://crowcousins.com/retro-apple-ii-software/
+* Reference: https://crowcousins.com/retro-apple-ii-software/
 
-*
+* MOUSE.s
 * For MERLIN Compiler
 * CALL 26368 from BASIC to run
-* 
+
 
 **********************
 * Zero Page locations
@@ -37,13 +37,13 @@ BASL = $28          ; Left Char of current Row - Base Address of Text Cursor's P
 DOSWARM = $3D0      ; WRM-START (PRO)DOS
 KBD = $C000         ; KEYBOARD INPUT
 STROBE = $C010      ; KEYBOARD STROBE
-LINPRT = $ED24      ; PRINT DECIMAL OF A,X
-PRBLNK = $F948      ; PRINT 3 BLANKS
-TEXT = $FB39        ; SETNORMAL TEXT WINDOW
-TABV = $FB5B        ; SETROW IN A-REG
-HOME = $FC58        ; HOME, CLEAR SCREEN
-CROUT = $FD8E       ; OUTPUT CR
-COUT = $FDED        ; OUTPUT CHAR
+LINPRT = $ED24      ; PRINT DECIMAL of A,X
+PRBLNK = $F948      ; PRINT 3 Blanks
+TEXT = $FB39        ; Set NORMAL TEXT Window
+TABV = $FB5B        ; Set ROW in A-REG
+HOME = $FC58        ; HOME, CLEAR Screen
+CROUT = $FD8E       ; Output CR
+COUT = $FDED        ; Output CHAR
 
 *********************
 * SCREENHOLE EQUATES
@@ -84,7 +84,7 @@ B_SRCY  = $6004
 *********************************************************
 ** Check if we're already in 80-column mode and exit to 40 column mode or vice-versa
     LDA $C01F       ; Read 80-column status
-    STA COL80       ; Switch 80 Col ON(1) or OFF(0)
+    STA COL80       ; Save if 80 Col is ON(1) or OFF(0)
     BMI SKIP40COL   ; If bit 7 is set, we're in 80-col mode
     LDA #$91        ; CTRL-Q to exit into
     JSR COUT        ; 40 COL
@@ -433,6 +433,8 @@ FMTSCR
     JSR HOME
     LDA #20
     JSR TABV
+    LDA #5
+    STA CH
     LDX #0
 INA
     LDA TXHDR,X     ; Print header
@@ -521,7 +523,7 @@ TOBASIC
     JMP DOSWARM
 
 TXHDR
-    ASC "  *** APPLE MOUSE TRACKING STATION ***"
+    ASC "Have fun Debugging on Apple II"
     DFB 00
 
 TXNOMSE
