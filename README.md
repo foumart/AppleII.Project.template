@@ -5,12 +5,10 @@
 1. Download Apple Commander from https://github.com/AppleCommander/AppleCommander/releases/tag/1.9.0
 2. Update the _appleCommander_ linkage in gulpfile.js
 
-### Uses Merlin 32 or RetroAssembler to compile Assembler scripts.
+### Uses Merlin 32 to compile Assembler scripts.
 
 1. Download Merlin 32 from https://brutaldeluxe.fr/products/crossdevtools/merlin/index.html
 2. Update the _merlin_ linkage in gulpfile.js
-3. If you want to compile raw ASM, download RetroAssembler from https://enginedesigns.net/retroassembler/
-4. Update the _retroassembler_ linkage in gulpfile.js
 
 ### Relies on Apple2jse emulator to run Apple //e in the web browser.
 
@@ -25,16 +23,25 @@
 ## Installation and Build
 
 1. Run **npm install** to install build dependencies.
-2. Build the project with **npm run start** or **npm run build**
+2. Build the project with `npm run start` or `npm run build`
 
-### What does a build do:
+### Build Process `npm run build`
 
-1. Cleans (or creates) a `public/` folder and prepares it for a new build.
-2. Copies the `emulator/` to the `public/` folder.
-3. Copies the source DSK image from `dsk/` into `emulator/json/disks/` (disk image have the same name as the project).
-4. Converts all source files (.bas, .s, .asm) into the needed format for Apple II (BAS, BIN) and writes them on disk.
-5. Starts or Syncs the Apple II emulator - it will load the disk at boot and should try to run a basic STARTUP file right away.
+1. Prepares a `public/` folder.
+2. Copies the `emulator/`.
+3. Copies the source DSK image from `dsk/` into `public/emulator/json/disks/`*¹.
+4. Converts all source files (.bas, .s, .asm) into the needed format for Apple II (BAS, BIN) and writes them to disk.
+5. Starts the Apple II emulator in the browser and loads the project *².
+6. Runs a Watch process for automatic reload.
 
-#### Useful for Development:
+### Workflow:
 
-- Live reload - the web Emulator will restart with any change you perform within the `src/` folder.
+1. Once built a Watch process will make sure to reload the project with any change you perform within the `src/` folder.
+2. The generated disk will be in `public/json/disks/`.
+
+##
+   
+  *¹ Disk image gets the same name as project name. A ProDOS disk with all assets should be prepared beforehand.
+
+  *² At load the emulator will boot the disk automatically and should try to run a basic STARTUP file right away.
+
