@@ -2,6 +2,8 @@ node_modules
 public
 bin
 tmp
+temp
+sources
 emulator
 package-lock.json
 .vscode

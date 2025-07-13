@@ -38,32 +38,39 @@ let allfiles;
 // TASKS:
 // ======
 
-// Copy the Apple II web emulator
-function app(cb) {
-	var emulatorPath = 'emulator/';
-	fs.access(emulatorPath, fs.constants.F_OK, (err) => {
-		if (err) {
-			throw new Error("Please copy the emulator!");
-		} else {
-			src('emulator/**/*', { allowEmpty: true })
-				.pipe(dest(dir+'/'))
-				.on("end", cb)
-		}
+// Copy the Apple II js web emulator
+async function emu() {
+	const emulatorPath = 'emulator/';
+	await new Promise((resolve, reject) => {
+		fs.access(emulatorPath, fs.constants.F_OK, (err) => {
+			if (err) {
+				reject(new Error("Please copy the emulator!"));
+			} else {
+				src('emulator/**/*', { allowEmpty: true })
+					.pipe(dest(dir+'/'))
+					.on("end", resolve)
+			}
+		});
 	});
 }
 
 // Copy the source dsk image (name should be the same as project name + .DSK)
 function dsk(cb) {
-	src(`dsk/${title}.dsk`, { allowEmpty: true })
+	return src(`dsk/${title}.dsk`, { allowEmpty: true })
 		.pipe(dest('public/json/disks/'))
 		.on("end", cb)
 }
 
 // Copy the source folder to allow manipulation in place and easier cleaning afterwards
-function tmp(cb) {
-	src(`src/*`, { allowEmpty: true })
+function copy(cb) {
+	return src(`src/*`, { allowEmpty: true })
 		.pipe(dest('public/tmp/'))
 		.on("end", cb)
+}
+
+async function empty(callback) {
+	await del(`public/tmp`, { force: true });
+	callback();
 }
 
 // Copy any BIN files if needed (images automation?), currently we supply the files with prepopulated source DSK.
@@ -74,121 +81,128 @@ function tmp(cb) {
 }*/
 
 // Compile all files in src/ folder (.bas, .s, .asm)
-function files(cb) {
-	const files = fs.readdirSync('public/tmp/');
+async function files() {
+	const files = await fs.promises.readdir('public/tmp/');
 	currentfile = 0;
 	allfiles = files.length - 1;
-	readFile(files, cb);
+	await readFile(files);
 }
 
-function readFile(files, cb) {
-	let file = files[currentfile];console.log("->"+file);
-	let name = file.substring(0, file.length-4).toUpperCase();
+async function readFile(files) {
+	let file = files[currentfile];
+	console.log("->" + file);
+	let name = file.substring(0, file.length - 4).toUpperCase();
 	if (file.toLowerCase().indexOf('.bas') > -1) {
 		// Compile a basic text file (.bas) into the tokenized BAS format and insert into the DSK
 		// =======================================================================================
 
 		// Remove all REM comments in the basic file
-		let basic = fs.readFileSync("public/tmp/"+file, 'utf8');
+		let basic = await fs.promises.readFile("public/tmp/" + file, 'utf8');
 		let regex = /^(?:\d+\s+)?REM.*|(:\s*)?REM.*|^\d+\s*$/gm;
 		basic = "0 REM " + title + " by Noncho Savov\r\n" + basic.replace(regex, ""); // remove REM comments
 		// Overwrite the file in tmp/
-		fs.writeFile("public/tmp/"+file, basic, function(err) {
-			if (err) throw err;
-		});
+		await fs.promises.writeFile("public/tmp/" + file, basic);
 
 		bas.push(file);
 		bascallbacks.push(false);
-		executeJava(`java -jar ${appleCommander} -bas public/json/disks/${title}.dsk ${name} bas 0x800 < public/tmp/${file}`, e => {
-			console.log(`Compiled BASIC file: ${name} at $800 from public/tmp/${file}`);
-			bascallbacks[bas.indexOf(file)] = true;
-			if (checkCompilation()) cb();
-			else {
-				if (currentfile ++>= allfiles) cb();
-				else readFile(files, cb);
-			}
+		await new Promise((resolve) => {
+			executeJava(`java -jar ${appleCommander} -bas public/json/disks/${title}.dsk ${name} bas 0x800 < public/tmp/${file}`,
+				() => {
+					console.log(`Compiled BASIC file: ${name} at $800 from public/tmp/${file}`);
+					bascallbacks[bas.indexOf(file)] = true;
+					resolve();
+				});
 		});
-	} else if (file.toLowerCase().indexOf('.s') > -1) {
-		// Compile an assembly source text file (.s) into a BIN format with Merin 32 and insert into the DSK
+		if (checkCompilation()) return;
+		if (currentfile++ >= allfiles) return;
+		return await readFile(files);
+	}
+	if (file.toLowerCase().indexOf('.s') > -1) {
+		// Compile an assembly source text file (.s) into a BIN format with Merlin 32 and insert into the DSK
 		// ==================================================================================================
-		name = file.substring(0, file.length-2).toUpperCase();
+		name = file.substring(0, file.length - 2).toUpperCase();
 		bin.push(file);
 		bincallbacks.push(false);
 		let _address;
 		// Determine the starting address of the binary data
-		fs.readFile("public/tmp/" +file, 'utf8', (err, data) => {
-			if (err) {
-				console.error(err);
-				return;
+		let data = await fs.promises.readFile("public/tmp/" + file, 'utf8');
+		var index = data.indexOf("ORG");
+		if (index == -1) {
+			_address = address;
+		} else {
+			_address = "";
+			while (_address.length < 4) {
+				if (parseInt(data[index + 1], 16) || parseInt(data[index + 1], 16) == 0) _address += data[index + 1];
+				index++;
 			}
-			var index = data.indexOf("ORG");// the ASM command that states the beginning address of a machine language program
-			if (index == -1) {
-				_address = address;
-			} else {// Getting the address after ORG nomatter how much spaces or tabs there might be
-				_address = "";
-				while (_address.length < 4) {
-					if (parseInt(data[index + 1], 16) || parseInt(data[index + 1], 16) == 0) _address += data[index + 1];
-					index ++;
-				}
-			}
-
-			// Use Merlin 32 to compile
-			const execFile = require('child_process').execFile;
+		}
+		const execFile = require('child_process').execFile;
+		await new Promise((resolve) => {
 			const merlinProcess = execFile(merlin, ['-V', '/', `public/tmp/${file}`]);
 			if (debug) merlinProcess.stdout.on('data', (data) => console.log(data));
+			merlinProcess.stdout.on('data', (data) => {
+				console.log(`stdout: ${data}`);
+			});
 			merlinProcess.stderr.on('data', (data) => { console.error(`Merlin 32 error: ${data}`); });
 			merlinProcess.on('close', (code) => {
 				console.log(`Compiled BINARY file: ${name} at $${_address} from public/tmp/${file}`);
-				executeJava(`java -jar ${appleCommander} -p public/json/disks/${title}.dsk ${name} bin 0x${_address} < public/tmp/${name}`, e => {
-					//console.log(`Transferred BINARY file: ${name} to be loaded at $${_address}`);
-					bincallbacks[bin.indexOf(file)] = true;
-					if (checkCompilation()) cb();
-					else {
-						if (currentfile ++>= allfiles) cb();
-						else readFile(files, cb);
-					}
-				});
+				executeJava(`java -jar ${appleCommander} -p public/json/disks/${title}.dsk ${name} bin 0x${_address} < public/tmp/${name}`,
+					() => {
+						bincallbacks[bin.indexOf(file)] = true;
+						resolve();
+					});
+			});
+			merlinProcess.on('exit', (code, signal) => {
+				if (code !== 0) {
+					console.error(`Merlin32 exited with code ${code} and signal ${signal}`);
+				}
 			});
 		});
-	} else if (file.toLowerCase().indexOf('.asm') > -1) {
+		if (checkCompilation()) return;
+		if (currentfile++ >= allfiles) return;
+		return await readFile(files);
+	}
+	if (file.toLowerCase().indexOf('.asm') > -1) {
 		// Compile an assembly raw text file (.asm) into a BIN format with Retro Assembler and insert into the DSK
 		// ========================================================================================================
 		bin.push(file);
 		bincallbacks.push(false);
-		// Use Retro Assembler to compile
 		const { spawn } = require('child_process');
-		const retroAsmProcess = spawn(retroassembler, [`public/tmp/${file}`, `public/tmp/${name}.bin`]);
-		if (debug) retroAsmProcess.stdout.on('data', (data) => console.log(data));
-		retroAsmProcess.stderr.on('data', (data) => { console.error(`Retro Assembler error: ${data}`); });
-		retroAsmProcess.on('close', (code) => {
-			console.log(`Compiled BINARY file: ${name} at $${address} from public/tmp/${file}`);
-			executeJava(`java -jar ${appleCommander} -p public/json/disks/${title}.dsk ${name} bin 0x${_address} < public/tmp/${name}.bin`, e => {
-				//console.log(`Transferred BINARY file: ${name} to be loaded at $${address}`);
-				bincallbacks[bin.indexOf(file)] = true;
-				if (checkCompilation()) cb();
-				else {
-					if (currentfile ++>= allfiles) cb();
-					else readFile(files, cb);
-				}
+		await new Promise((resolve) => {
+			const retroAsmProcess = spawn(retroassembler, [`public/tmp/${file}`, `public/tmp/${name}.bin`]);
+			if (debug) retroAsmProcess.stdout.on('data', (data) => console.log(data));
+			retroAsmProcess.stderr.on('data', (data) => { console.error(`Retro Assembler error: ${data}`); });
+			retroAsmProcess.on('close', (code) => {
+				console.log(`Compiled BINARY file: ${name} at $${address} from public/tmp/${file}`);
+				executeJava(`java -jar ${appleCommander} -p public/json/disks/${title}.dsk ${name} bin 0x${_address} < public/tmp/${name}.bin`,
+					() => {
+						bincallbacks[bin.indexOf(file)] = true;
+						resolve();
+					});
 			});
 		});
-	} else if (file.toLowerCase().indexOf('.txt') > -1) {
+		if (checkCompilation()) return;
+		if (currentfile++ >= allfiles) return;
+		return await readFile(files);
+	}
+	if (file.toLowerCase().indexOf('.txt') > -1) {
 		// Compile a pure text file (.txt) and insert into the DSK
 		// ========================================================
 		txt.push(file);
 		txtcallbacks.push(false);
-		executeJava(`java -jar ${appleCommander} -ptx public/json/disks/${title}.dsk ${name} txt < public/tmp/${name}.txt`, e => {
-			console.log(`Copied TXT file: ${name} from public/tmp/${file}`);
-			txtcallbacks[txt.indexOf(file)] = true;
-			if (checkCompilation()) cb();
-			else {
-				if (currentfile ++>= allfiles) cb();
-				else readFile(files, cb);
-			}
+		await new Promise((resolve) => {
+			executeJava(`java -jar ${appleCommander} -ptx public/json/disks/${title}.dsk ${name} txt < public/tmp/${name}.txt`,
+				() => {
+					console.log(`Copied TXT file: ${name} from public/tmp/${file}`);
+					txtcallbacks[txt.indexOf(file)] = true;
+					resolve();
+				});
 		});
-	} else {
-		console.log("File " + file + " format unknown! (" + file.substring(file.length-4) + ") ");
+		if (checkCompilation()) return;
+		if (currentfile++ >= allfiles) return;
+		return await readFile(files);
 	}
+	console.log("File " + file + " format unknown! (" + file.substring(file.length - 4) + ") ");
 }
 
 // When all src files are compiled we delete the temporary folder
@@ -208,7 +222,7 @@ function checkCompilation() {
 		//console.log(`""`);
 		console.log(`Compilation complete. http://localhost:8080/json/disks/${title}.dsk`);
 		//console.log(`""`);
-		del(`public/tmp`, {force:true});
+		//del(`public/tmp`, {force:true});
 	}
 	return check;
 }
@@ -238,7 +252,7 @@ function executeJava(cmdCode, cb) {
 
 // Delete the public folder generated with each build
 function clean(callback) {
-	del(dir+'/**/*', {force:true});
+	del(dir+'/**/*', { force: true });
 	callback();
 }
 
@@ -285,8 +299,8 @@ function getDateString(shorter) {
 }
 
 // Exports
-exports.default = series(clean, app, dsk, tmp, files, watch);
-exports.sync = series(clean, app, dsk, tmp, files, reload);
+exports.sync = series(dsk, empty, copy, files, reload);//clean, app, 
+exports.default = series(clean, emu, exports.sync);//, watch
 
 /*
    Gulpfile by Noncho Savov
