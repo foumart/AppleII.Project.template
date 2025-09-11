@@ -121,15 +121,17 @@ async function readFile(files) {
 		// Compile an assembly source text file (.s) into a BIN format with Merlin 32 and insert into the DSK
 		// ==================================================================================================
 		name = file.substring(0, file.length - 2).toUpperCase();
-		bin.push(file);
-		bincallbacks.push(false);
-		let _address;
 		// Determine the starting address of the binary data
 		let data = await fs.promises.readFile("public/tmp/" + file, 'utf8');
+		let _address = "";
 		var index = data.indexOf("ORG");
 		if (index == -1) {
-			_address = address;
+			console.log(`Skipping fragment file: ${file}`);
+			if (currentfile++ >= allfiles) return;
+			return await readFile(files);
 		} else {
+			bin.push(file);
+			bincallbacks.push(false);
 			_address = "";
 			while (_address.length < 4) {
 				if (parseInt(data[index + 1], 16) || parseInt(data[index + 1], 16) == 0) _address += data[index + 1];
