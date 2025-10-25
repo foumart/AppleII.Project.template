@@ -1,28 +1,25 @@
 const { src, dest, series } = require('gulp');
 const gulp = require('gulp');
 const browserSync = require('browser-sync').create();
+const path = require('path');
 const del = require('del');
+const fs = require("fs-extra");
+const exec = require('child_process').exec;
+const execFile = require('child_process').execFile;
+const { spawn } = require('child_process');
 const argv = require('yargs').argv;
 const package = require('./package.json');
-const exec = require('child_process').exec;
-const fs = require("fs");
 
 // the following data is taken directly from package.json
 const title = package.name;
-const id_name = `${title.replace(/\s/g, '')}_${getDateString(true)}`;
 const version = package.version;
 
 // data provided via additional params. "dir" sets the output directory
 const dir = argv.dir || 'public';
-const test = argv.test != undefined ? true : false;
-const debug = argv.debug != undefined ? true : false;
-const address = "6000";// default address (in HEX) at where to load binary files
+const debug = !!argv.debug;
 
 const appleCommander = "C:/Standalone/AppleWin/ac.jar";
-//const appleWin = "C:/Standalone/AppleWin/AppleWin.exe";// used externally
 const merlin = "C:/Standalone/AppleWin/Merlin32.exe";
-const retroassembler = "C:/Standalone/AppleWin/retroassembler/retroassembler.exe";
-
 
 // temporary vars used during build
 const bas = [];// holds bas file names found in src/
@@ -43,29 +40,26 @@ async function emu() {
 	const emulatorPath = 'emulator/';
 	await new Promise((resolve, reject) => {
 		fs.access(emulatorPath, fs.constants.F_OK, (err) => {
-			if (err) {
-				reject(new Error("Please copy the emulator!"));
-			} else {
-				src('emulator/**/*', { allowEmpty: true })
-					.pipe(dest(dir+'/'))
-					.on("end", resolve)
-			}
+			if (err) return reject(new Error("Please copy the emulator!"));
+
+			src('emulator/**/*', { allowEmpty: true, encoding: false })
+				.pipe(dest(dir))
+				.on('end', resolve)
+				.on('error', reject);
 		});
 	});
 }
 
-// Copy the source dsk image (name should be the same as project name + .DSK)
-function dsk(cb) {
-	return src(`dsk/${title}.dsk`, { allowEmpty: true })
-		.pipe(dest('public/json/disks/'))
-		.on("end", cb)
+// Copy the source dsk image (name should be the same as project name + .dsk)
+async function dsk() {
+	await fs.copy(`dsk/${title}.dsk`, `public/json/disks/${title}.dsk`, { overwrite: true });
 }
 
 // Copy the source folder to allow manipulation in place and easier cleaning afterwards
 function copy(cb) {
 	return src(`src/*`, { allowEmpty: true })
 		.pipe(dest('public/tmp/'))
-		.on("end", cb)
+		.on("end", cb);
 }
 
 async function empty(callback) {
@@ -75,9 +69,9 @@ async function empty(callback) {
 
 // Copy any BIN files if needed (images automation?), currently we supply the files with prepopulated source DSK.
 /*function bin(cb) {
-	executeJava(`java -jar ${appleCommander} -p public/json/disks/GRIDLOCK.dsk TITLE bin 0x2000 < bin/title.A2FC`, () => {
-		executeJava(`java -jar ${appleCommander} -p public/json/disks/GRIDLOCK.dsk MOON bin 0x2000 < bin/moon.A2FC`, cb);
-	});
+	await executeJavaAsync(`java -jar ${appleCommander} -p public/json/disks/${title}.dsk TITLE bin 0x2000 < bin/title.A2FC`);
+	await executeJavaAsync(`java -jar ${appleCommander} -p public/json/disks/${title}.dsk MOON bin 0x2000 < bin/moon.A2FC`);
+	cb?.();
 }*/
 
 // Compile all files in src/ folder (.bas, .s, .asm)
@@ -90,7 +84,7 @@ async function files() {
 
 async function readFile(files) {
 	let file = files[currentfile];
-	console.log("->" + file);
+	if (debug) console.log("->" + file);
 	let name = file.substring(0, file.length - 4).toUpperCase();
 	if (file.toLowerCase().indexOf('.bas') > -1) {
 		// Compile a basic text file (.bas) into the tokenized BAS format and insert into the DSK
@@ -99,7 +93,11 @@ async function readFile(files) {
 		// Remove all REM comments in the basic file
 		let basic = await fs.promises.readFile("public/tmp/" + file, 'utf8');
 		let regex = /^(?:\d+\s+)?REM.*|(:\s*)?REM.*|^\d+\s*$/gm;
-		basic = "0 REM " + title + " by Noncho Savov\r\n" + basic.replace(regex, ""); // remove REM comments
+		basic = "0 REM " + title + " by Noncho Savov\r\n" + basic.replace(regex, "");
+		// Switch on debug mode (if applicable)
+		if (debug) basic = basic.replace("DEBUG% = 0", "DEBUG% = 1");
+		// Update version number (if present)
+		basic = basic.replaceAll("{version}", "ver " + version);
 		// Overwrite the file in tmp/
 		await fs.promises.writeFile("public/tmp/" + file, basic);
 
@@ -108,7 +106,7 @@ async function readFile(files) {
 		await new Promise((resolve) => {
 			executeJava(`java -jar ${appleCommander} -bas public/json/disks/${title}.dsk ${name} bas 0x800 < public/tmp/${file}`,
 				() => {
-					console.log(`Compiled BASIC file: ${name} at $800 from public/tmp/${file}`);
+					console.log(`Compiled BASIC file: ${name}`);
 					bascallbacks[bas.indexOf(file)] = true;
 					resolve();
 				});
@@ -132,22 +130,33 @@ async function readFile(files) {
 		} else {
 			bin.push(file);
 			bincallbacks.push(false);
-			_address = "";
-			while (_address.length < 4) {
-				if (parseInt(data[index + 1], 16) || parseInt(data[index + 1], 16) == 0) _address += data[index + 1];
+			index = data.indexOf("$", index);
+			if (index !== -1) {
 				index++;
+				while (_address.length < 4 && index < data.length) {
+					let ch = data[index].toUpperCase();
+					if ("0123456789ABCDEF".includes(ch)) {
+						_address += ch;
+					} else if (_address.length > 0) {
+						break;
+					}
+					index++;
+				}
+			}
+			if (debug) {
+				// Switch on debug mode (if applicable)
+				data = data.replace("BUILD_DEBUG = 0", "BUILD_DEBUG = 1");
 			}
 		}
-		const execFile = require('child_process').execFile;
+
 		await new Promise((resolve) => {
-			const merlinProcess = execFile(merlin, ['-V', '/', `public/tmp/${file}`]);
+			const args = ['/', `public/tmp/${file}`];
+			if (debug) args.unshift('-V');
+			const merlinProcess = execFile(merlin, args);
 			if (debug) merlinProcess.stdout.on('data', (data) => console.log(data));
-			merlinProcess.stdout.on('data', (data) => {
-				console.log(`stdout: ${data}`);
-			});
 			merlinProcess.stderr.on('data', (data) => { console.error(`Merlin 32 error: ${data}`); });
 			merlinProcess.on('close', (code) => {
-				console.log(`Compiled BINARY file: ${name} at $${_address} from public/tmp/${file}`);
+				console.log(`Compiled BINARY file: ${name} at $${_address}`);
 				executeJava(`java -jar ${appleCommander} -p public/json/disks/${title}.dsk ${name} bin 0x${_address} < public/tmp/${name}`,
 					() => {
 						bincallbacks[bin.indexOf(file)] = true;
@@ -164,29 +173,6 @@ async function readFile(files) {
 		if (currentfile++ >= allfiles) return;
 		return await readFile(files);
 	}
-	if (file.toLowerCase().indexOf('.asm') > -1) {
-		// Compile an assembly raw text file (.asm) into a BIN format with Retro Assembler and insert into the DSK
-		// ========================================================================================================
-		bin.push(file);
-		bincallbacks.push(false);
-		const { spawn } = require('child_process');
-		await new Promise((resolve) => {
-			const retroAsmProcess = spawn(retroassembler, [`public/tmp/${file}`, `public/tmp/${name}.bin`]);
-			if (debug) retroAsmProcess.stdout.on('data', (data) => console.log(data));
-			retroAsmProcess.stderr.on('data', (data) => { console.error(`Retro Assembler error: ${data}`); });
-			retroAsmProcess.on('close', (code) => {
-				console.log(`Compiled BINARY file: ${name} at $${address} from public/tmp/${file}`);
-				executeJava(`java -jar ${appleCommander} -p public/json/disks/${title}.dsk ${name} bin 0x${_address} < public/tmp/${name}.bin`,
-					() => {
-						bincallbacks[bin.indexOf(file)] = true;
-						resolve();
-					});
-			});
-		});
-		if (checkCompilation()) return;
-		if (currentfile++ >= allfiles) return;
-		return await readFile(files);
-	}
 	if (file.toLowerCase().indexOf('.txt') > -1) {
 		// Compile a pure text file (.txt) and insert into the DSK
 		// ========================================================
@@ -195,7 +181,7 @@ async function readFile(files) {
 		await new Promise((resolve) => {
 			executeJava(`java -jar ${appleCommander} -ptx public/json/disks/${title}.dsk ${name} txt < public/tmp/${name}.txt`,
 				() => {
-					console.log(`Copied TXT file: ${name} from public/tmp/${file}`);
+					console.log(`Compiled TXT file: ${name}`);
 					txtcallbacks[txt.indexOf(file)] = true;
 					resolve();
 				});
@@ -221,35 +207,55 @@ function checkCompilation() {
 		if (!txtcallbacks[i]) check = false;
 	}
 	if (check) {
-		//console.log(`""`);
 		console.log(`Compilation complete. http://localhost:8080/json/disks/${title}.dsk`);
-		//console.log(`""`);
-		//del(`public/tmp`, {force:true});
+		if (!debug) del(`public/tmp`, {force:true});
 	}
 	return check;
 }
 
-// Do we want to test on AppleWin? for example the Mouse interface does not work on the web emulator.
-/*function appleWin(cb) {
-	// run AppleWin directly (temporary solution)
-	const { spawn } = require('child_process');
-	const path = require('path');
-	const appleWinProcess = spawn(appleWin, [`public/json/disks/${title}.dsk`]);
-	// Optional: Handle events from the spawned process
-	appleWinProcess.stdout.on('data', (data) => console.log(`stdout: ${data}`));
-	appleWinProcess.stderr.on('data', (data) => console.error(`stderr: ${data}`));
-	appleWinProcess.on('close', (code) => console.log(`child process exited with code ${code}`));
-}*/
+// Do we want to test on AppleWin? for example the Vaporlock effect does not work on the web emulator.
+async function appleWin(cb) {
+	const appleWinPath = path.resolve("C:/Standalone/AppleWin/Applewin.exe");
+	const diskPath = path.resolve(`public/json/disks/${title}.dsk`);
 
-// execute scripts'n stuff
+	console.log(`Launching AppleWin with disk: ${diskPath}`);
+
+	const appleWinProcess = spawn(appleWinPath, ['-d1', diskPath], {
+		stdio: ['ignore', 'pipe', 'pipe'],
+		detached: false,
+	});
+
+	appleWinProcess.stdout.on('data', (data) => console.log(`AppleWin stdout: ${data}`));
+	appleWinProcess.stderr.on('data', (data) => console.error(`AppleWin stderr: ${data}`));
+
+	appleWinProcess.on('error', (err) => {
+		console.error(`Failed to start AppleWin: ${err.message}`);
+		if (cb) cb(err);
+	});
+
+	appleWinProcess.on('close', (code) => {
+		console.log(`AppleWin exited with code ${code}`);
+		if (cb) cb(null, code);
+	});
+}
+
+// Execute java scripts
 function executeJava(cmdCode, cb) {
-	exec(cmdCode,
-		function (error, stdout, stderr){//console.log(JSON.stringify(stdout));
+	return new Promise((resolve, reject) => {
+		exec(cmdCode, (error, stdout, stderr) => {
 			if (stdout) console.log(cmdCode + ' stdout: ' + JSON.stringify(stdout));
 			if (stderr) console.log(cmdCode + ' stderr: ' + stderr);
-			if (error !== null) console.log('exec error: ' + error); else cb();
-		}
-	);
+
+			if (error) {
+				console.log('exec error: ' + error);
+				if (cb) cb(error);
+				reject(error);
+			} else {
+				if (cb) cb();
+				resolve();
+			}
+		});
+	});
 }
 
 // Delete the public folder generated with each build
@@ -261,10 +267,10 @@ function clean(callback) {
 // Watch for changes in the source folder
 function watch(callback) {
 	browserSync.init({
-		server: './'+dir,
+		server: `./${dir}`,
 		startPath: `#json/disks/${title}.dsk`,
 		ui: false,
-		port: 8080
+		port: 8080,
 	});
 	
 	gulp.watch('./src').on('change', () => {
@@ -289,20 +295,10 @@ function reload(callback) {
 	}
 }
 
-// Helper function for timestamp and naming
-function getDateString(shorter) {
-	const date = new Date();
-	const year = date.getFullYear();
-	const month = `${date.getMonth() + 1}`.padStart(2, '0');
-	const day =`${date.getDate()}`.padStart(2, '0');
-	if (shorter) return `${year}${month}${day}`;
-	const signiture =`${date.getHours()}`.padStart(2, '0')+`${date.getMinutes()}`.padStart(2, '0')+`${date.getSeconds()}`.padStart(2, '0');
-	return `${year}${month}${day}_${signiture}`;
-}
-
 // Exports
-exports.sync = series(dsk, empty, copy, files, reload);//clean, app, 
-exports.default = series(clean, emu, exports.sync);//, watch
+exports.sync = series(dsk, empty, copy, files, reload);
+exports.default = series(clean, emu, exports.sync);
+exports.aw = series(appleWin);
 
 /*
    Gulpfile by Noncho Savov

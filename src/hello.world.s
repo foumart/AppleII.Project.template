@@ -8,10 +8,19 @@ START
     JSR HOME
 
     ; Example of macros usage and how to pass parameters in
-    POS_UPDATE #6;#21
+    POS_UPDATE #0;#21
 
-    LDA #0
-    TAX
+    LDX #0             ; Counter
+
+UNDERLINE_LOOP
+    LDA #83            ; ASCII "–"
+    JSR COUT           ; print it
+    INX
+    CPX #40
+    BNE UNDERLINE_LOOP
+
+    POS_UPDATE #4;#22
+    LDX #0
 
 HELLO_WORLD_TYPE
     LDA HELLO_WORLD_TEXT,X   ; Print message letter-by-letter

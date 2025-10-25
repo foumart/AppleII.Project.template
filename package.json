@@ -1,24 +1,28 @@
 {
 	"name": "a2-project",
-	"version": "0.0.2",
+	"version": "0.0.3",
 	"description": "Project setup for Apple II with automatic build and live-reload",
 	"main": "src/scripts/app.js",
 	"scripts": {
 		"build": "npx del-cli public --force && gulp",
-		"start": "npx del-cli public --force && gulp sync"
+		"dev": "npx del-cli public --force && gulp --debug",
+		"start": "npx del-cli public --force && gulp sync",
+		"appleWin": "gulp aw"
 	},
 	"resolutions": {
-		"mkdir": "^0.5.3"
+		"mkdir": "0.5.3"
 	},
 	"devDependencies": {
-		"browser-sync": "^2.27.9",
-		"del-cli": "^4.0.1",
-		"gulp": "^4.0.2",
-		"yargs": "^17.4.0",
-		"child_process": "^1.0.2"
+		"browser-sync": "3.0.4",
+		"child_process": "1.0.2",
+		"del-cli": "4.0.1",
+		"gulp": "5.0.1",
+		"yargs": "17.4.0",
+		"fs-extra": "11.3.2",
+		"path": "0.12.7"
 	},
 	"dependencies": {
-		"npm": "^8.11.0"
+		"npm": "11.6.2"
 	},
 	"repository": {
 		"type": "git",
