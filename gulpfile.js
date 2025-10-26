@@ -199,15 +199,7 @@ async function readFile(files) {
 function checkCompilation() {
 	var check = true;
 	if (currentfile < allfiles) return false;
-	for (var i = 0; i < bascallbacks.length; i ++) {
-		if (!bascallbacks[i]) check = false;
-	}
-	for (var i = 0; i < bincallbacks.length; i ++) {
-		if (!bincallbacks[i]) check = false;
-	}
-	for (var i = 0; i < txtcallbacks.length; i ++) {
-		if (!txtcallbacks[i]) check = false;
-	}
+	check = [bascallbacks, bincallbacks, txtcallbacks].every(arr => arr.every(x => x));
 	if (check) {
 		console.log(`Compilation complete. http://localhost:8080/json/disks/${title}.dsk`);
 		if (!debug) del(`public/tmp`, {force:true});

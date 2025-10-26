@@ -2,12 +2,11 @@
 	"name": "a2-project",
 	"version": "0.0.3",
 	"description": "Project setup for Apple II with automatic build and live-reload",
-	"main": "src/scripts/app.js",
 	"scripts": {
 		"build": "npx del-cli public --force && gulp",
 		"dev": "npx del-cli public --force && gulp --debug",
-		"start": "npx del-cli public --force && gulp sync",
-		"appleWin": "gulp aw"
+		"sync": "npx del-cli public --force && gulp sync",
+		"aw": "gulp aw"
 	},
 	"resolutions": {
 		"mkdir": "0.5.3"
