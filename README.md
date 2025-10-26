@@ -23,17 +23,17 @@
 ## Installation and Build
 
 1. Run `npm install` to install build dependencies.
-2. Build the project with `npm run build` or `npm run dev` (for debug)
-3. Optionally test on AppleWin with `npm run appleWin`
+2. Build the project with `npm run build` (release) or `npm run dev` (debug).
+3. Optionally test on AppleWin with `npm run aw`.
 
 ### Build Process: `npm run build`
 
 1. Prepares a `public/` folder.
 2. Copies the `emulator/`.
 3. Copies the source DSK image from `dsk/` into `public/emulator/json/disks/`*¹.
-4. Compiles all source files (.bas, .s and .txt) into the needed format for Apple II (BAS, BIN) and writes them to disk.
+4. Compiles all source files (.bas, .s and .txt) into the needed format for Apple II (BAS, BIN, TXT) and writes them to disk.
 5. Starts the Apple II emulator in the browser and loads the project *².
-6. Runs a Watch process for automatic reload.
+6. Runs a Watch process (Browser-sync) for automatic reload.
 
 ##
    
@@ -45,11 +45,11 @@
 
 ### Workflow:
 
-1. Once the project is built, a Watch process will make sure to reload the project with any change you perform within the `src/` folder.
-2. The generated disk will be in `public/json/disks/`.
+ - Once the project is built, a Watch process will make sure to reload the project with any change you perform within the `src/` folder. Keep in mind that the build process may fail if the `public` directory is opened in another app, like AppleWin.
+ - The generated disk will be in `public/json/disks/`.
 
 ##
 
 #### Older versions:
-https://www.foumartgames.com/extensions/a2-project/#json/disks/a2-project.dsk
-https://www.foumartgames.com/extensions/AppleIIe/#../AppleII/json/disks/A2-project.dsk (with experimental mouse support)
+https://www.foumartgames.com/extensions/a2-project/#json/disks/a2-project.dsk (version 0.1)
+https://www.foumartgames.com/extensions/AppleIIe/#../AppleII/json/disks/a2-project.dsk (version 0.2 - including experimental mouse scripts)
