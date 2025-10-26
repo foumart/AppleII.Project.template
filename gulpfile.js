@@ -13,11 +13,13 @@ const package = require('./package.json');
 // the following data is taken directly from package.json
 const title = package.name;
 const version = package.version;
+const author = package.author.name
 
 // data provided via additional params. "dir" sets the output directory
 const dir = argv.dir || 'public';
 const debug = !!argv.debug;
 
+const appleWin = "C:/Standalone/AppleWin/Applewin.exe";
 const appleCommander = "C:/Standalone/AppleWin/ac.jar";
 const merlin = "C:/Standalone/AppleWin/Merlin32.exe";
 
@@ -93,7 +95,7 @@ async function readFile(files) {
 		// Remove all REM comments in the basic file
 		let basic = await fs.promises.readFile("public/tmp/" + file, 'utf8');
 		let regex = /^(?:\d+\s+)?REM.*|(:\s*)?REM.*|^\d+\s*$/gm;
-		basic = "0 REM " + title + " by Noncho Savov\r\n" + basic.replace(regex, "");
+		basic = `0 REM ${title} by ${author}\r\n${basic.replace(regex, "")}`;
 		// Switch on debug mode (if applicable)
 		if (debug) basic = basic.replace("DEBUG% = 0", "DEBUG% = 1");
 		// Update version number (if present)
@@ -214,8 +216,8 @@ function checkCompilation() {
 }
 
 // Do we want to test on AppleWin? for example the Vaporlock effect does not work on the web emulator.
-async function appleWin(cb) {
-	const appleWinPath = path.resolve("C:/Standalone/AppleWin/Applewin.exe");
+async function launchAppleWin(cb) {
+	const appleWinPath = path.resolve(appleWin);
 	const diskPath = path.resolve(`public/json/disks/${title}.dsk`);
 
 	console.log(`Launching AppleWin with disk: ${diskPath}`);
@@ -298,7 +300,7 @@ function reload(callback) {
 // Exports
 exports.sync = series(dsk, empty, copy, files, reload);
 exports.default = series(clean, emu, exports.sync);
-exports.aw = series(appleWin);
+exports.aw = series(launchAppleWin);
 
 /*
    Gulpfile by Noncho Savov
